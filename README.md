@@ -1656,8 +1656,8 @@ warnings in the journal.
 
 With Parakeet, Whisper, or another server on your own machine, the words
 you see while you are still holding the hotkey are a live guess. They stay
-open to correction until you let go, and the transcription then is what
-remains. If that finished sentence is still wrong, check that `[stt] model`
+open to correction until you let go, and the transcription at stop is
+what stays on screen. If that finished sentence is still wrong, check that `[stt] model`
 is the id your server actually serves — an empty model asks for
 `gpt-4o-transcribe` — and watch the journal while you dictate:
 
