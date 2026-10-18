@@ -78,9 +78,11 @@ for you if you don't have it. Press **Ctrl+Alt+V** in any app. See
 - **Everywhere, natively.** Real keystrokes (`uinput` on Linux, `SendInput` on
   Windows, Quartz on macOS) — works in editors, browsers, chat, and the
   **terminal**, not just a textbox in one app.
-- **Molten dictation.** With xAI (the default) or your own local speech server,
-  words appear as you speak and self-correct in place, then freeze — you watch
-  the text think. (OpenAI, Groq, Deepgram and AssemblyAI type when you stop.)
+- **Molten dictation.** With xAI (the default), words appear as you speak,
+  repair in place, and freeze once they firm up. With your own local speech
+  server they appear the same way and stay correctable until you stop,
+  because each pass re-hears the whole clip. (OpenAI, Groq, Deepgram and
+  AssemblyAI type when you stop.)
 - **Nothing starts until you ask.** The mic opens only when you press to
   talk or summon Kai, unless you turn on Kai's wake word, and Kai itself
   starts on its own only when it runs locally. In a terminal it
@@ -147,6 +149,7 @@ memory off (`memory_enabled = false`). See `[assistant]` / `[wake]` in
 **Flow — [molten dictation](#flow--molten-dictation).** With xAI (the
 default) or your own local speech server, words appear in the focused field
 *while you speak* and repair themselves in place as the transcript firms up.
+On a local speech server that repair continues until you stop.
 A spoken edit grammar ("scratch that", "new line", "period", `literal`),
 per-app context registers (prose, terminal for a terminal it recognizes, and
 verbatim for a password field on Linux or in a classic Windows edit box,
@@ -760,13 +763,20 @@ Flow is on by default. It has two halves:
   OpenAI-compatible server via `live_rest`, and `hyperfurion`, the hosted
   subscription, for existing subscribers): text streams into the focused
   field while you speak; other providers type the whole dictation when you
-  stop. Words stay *molten* for a stability window (default 1.5 s); when the
-  provider revises a molten word, the daemon backspaces to the divergence point and
-  retypes — the text repairs itself in front of you. Once a word survives
-  the window it *freezes*: a later guess from the recognizer never retypes
-  it (your own spoken edits still can), so repairs stay short and your
-  caret never runs away. `enabled = false` under `[flow]` turns all of this
-  off: the transcript is typed once, as recognized, when you stop.
+  stop. With a streaming provider, words stay *molten* for a stability
+  window (default 1.5 s); when the provider revises a molten word, the
+  daemon backspaces to the divergence point and retypes — the text repairs
+  itself in front of you. Once a word survives the window it *freezes*: a
+  later guess from the recognizer never retypes it (your own spoken edits
+  still can), so repairs stay short and your caret never runs away. A local
+  OpenAI-compatible server re-transcribes the whole clip on every pass and
+  can still change the beginning, so those words stay molten until you
+  stop, and the transcription at stop is the one that freezes. A pass that
+  runs longer than the live interval waits before the next one; once the
+  clip is long and the server is slow, later passes send only the new
+  audio, and stopping transcribes the whole clip.
+  `enabled = false` under `[flow]` turns all of this off: the transcript is
+  typed once, as recognized, when you stop.
 
 While recording, the overlay pill (GNOME and Windows) becomes a live
 caption: a small VU meter plus the molten tail of the transcript, updating
@@ -1329,9 +1339,11 @@ without code changes.
 
 Words land while you speak with `xai` and `hyperfurion`, which stream, and
 with `openai` pointed at a local server, which is re-transcribed every 2.5
-seconds (`[flow] live_rest = "auto"`). With OpenAI's cloud, Groq, Deepgram or
-AssemblyAI the text is typed when you stop; `live_rest = "always"` makes them
-re-transcribe while you speak too, and every pass is billed.
+seconds (`[flow] live_rest = "auto"`). A local pass can rewrite earlier
+words, so they stay revisable until you stop. With OpenAI's cloud, Groq,
+Deepgram or AssemblyAI the text is typed when you stop; `live_rest =
+"always"` makes them re-transcribe while you speak too, and every pass is
+billed.
 
 ### Text-To-Speech
 
@@ -1388,12 +1400,9 @@ The ids above are [Speaches](https://github.com/speaches-ai/speaches)'
 Whisper and Kokoro. Leave `model` or `voice_id` unset and OpenAI's own names
 (`gpt-4o-transcribe`, `gpt-4o-mini-tts`, `coral`) are sent, which a local
 server may not serve. Words still land while you speak: the recording is
-re-transcribed every 2.5 seconds (`[flow] live_rest = "auto"`). A local
-model often changes its mind about the start of the sentence on a later
-pass, so those words stay revisable until you stop — a Parakeet or Whisper
-server cannot freeze an early mishear in place. A pass that runs long
-waits before the next one, and once the clip is long only the new audio
-is sent, so the microphone keeps the samples the final transcription needs.
+re-transcribed every 2.5 seconds (`[flow] live_rest = "auto"`), and a word
+from an early pass can still be corrected when you stop. See
+[Flow](#flow--molten-dictation).
 `voice-keyboard setup` can write the speech-server part for you, model ids
 included, and sets `[llm]` to a running llama-server's model, or to a local
 server you name.
@@ -1416,7 +1425,7 @@ Open models and servers that work well locally:
 | --- | --- |
 | [Speaches](https://github.com/speaches-ai/speaches) | Easiest single server: OpenAI-compatible STT **and** TTS in one process (faster-whisper + Kokoro). |
 | [Whisper large-v3-turbo](https://huggingface.co/openai/whisper-large-v3-turbo) | The default open STT workhorse; great accuracy/speed balance. |
-| [NVIDIA Parakeet TDT](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3) | Near the top of the [Open ASR leaderboard](https://huggingface.co/spaces/hf-audio/open_asr_leaderboard); extremely fast on a GPU. |
+| [NVIDIA Parakeet TDT](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3) | Near the top of the [Open ASR leaderboard](https://huggingface.co/spaces/hf-audio/open_asr_leaderboard); extremely fast on a GPU. v3 covers 25 European languages and can mix one into another; for English, v2 holds the words more steadily. |
 | [Voxtral Mini 3B](https://huggingface.co/mistralai/Voxtral-Mini-3B-2507) | Apache-2.0 speech model; vLLM serves it OpenAI-compatible. |
 | [whisper.cpp](https://github.com/ggml-org/whisper.cpp) | CPU-only and edge boxes; no GPU required. Start `whisper-server` with `--inference-path /v1/audio/transcriptions` so it answers at the path OpenAI's API uses. |
 | [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) | Small, high-quality open TTS voice (what Speaches serves). |
@@ -1642,6 +1651,23 @@ is typed through the uinput key path; anything else (accents, CJK, emoji, smart 
 is pasted through the clipboard, which requires `wl-copy` (Wayland) or `xclip`
 (X11). If neither tool is installed, non-ASCII characters are skipped with
 warnings in the journal.
+
+### A Local Model Keeps The Wrong Words
+
+With Parakeet, Whisper, or another server on your own machine, the words
+you see while you are still holding the hotkey are a live guess. They stay
+open to correction until you let go, and the transcription then is what
+remains. If that finished sentence is still wrong, check that `[stt] model`
+is the id your server actually serves — an empty model asks for
+`gpt-4o-transcribe` — and watch the journal while you dictate:
+
+```bash
+journalctl --user -u voice-keyboard-daemon -f
+```
+
+Parakeet v3 covers European languages and can drop another language's words
+into English. For English dictation, Parakeet v2 or Whisper large-v3-turbo
+holds the words more steadily.
 
 ### Stop Takes A While
 
