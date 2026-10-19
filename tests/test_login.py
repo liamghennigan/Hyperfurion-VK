@@ -1,65 +1,35 @@
-"""`voice-keyboard login` config writing + relay-base derivation.
+"""`voice-keyboard login` refuses, and does not contact a host.
 
-The login command's one risky bit is editing the user's config.toml in place:
-it must set the hosted key + provider selection without trampling the rest of
-the file. These tests pin that behavior against a real tomllib round-trip.
+`_set_toml_value` is what setup and the installers use to edit config.toml
+in place. These tests pin that editor against a real tomllib round-trip.
 """
 
+import io
+from contextlib import redirect_stderr
+
+import pytest
 import tomllib
 
-from voice_keyboard.client import _apply_hosted_login, _relay_base, _set_toml_value
+from voice_keyboard.client import _run_login, _set_toml_value
 
 
 def _parsed(text: str) -> dict:
     return tomllib.loads(text)
 
 
-class TestApplyHostedLogin:
-    def test_fresh_config_is_valid_and_complete(self) -> None:
-        out = _apply_hosted_login("", "hfk_abc123")
-        cfg = _parsed(out)  # must be valid TOML
-        assert cfg["providers"]["hyperfurion"]["api_key"] == "hfk_abc123"
-        assert cfg["stt"]["provider"] == "hyperfurion"
-        assert cfg["tts"]["provider"] == "hyperfurion"
+def test_login_refuses_without_contacting_a_host(monkeypatch) -> None:
+    def boom(*_args, **_kwargs):
+        raise AssertionError("login must not use the network")
 
-    def test_existing_provider_is_switched_and_rest_preserved(self) -> None:
-        existing = (
-            "# my hand-tuned config\n"
-            "[stt]\n"
-            'provider = "xai"\n'
-            'language = "en"\n'
-            "\n"
-            "[tts]\n"
-            'provider = "xai"\n'
-            "\n"
-            "[audio]\n"
-            "sample_rate = 16000\n"
-        )
-        out = _apply_hosted_login(existing, "hfk_new")
-        cfg = _parsed(out)
-        assert cfg["stt"]["provider"] == "hyperfurion"
-        assert cfg["tts"]["provider"] == "hyperfurion"
-        # untouched neighbors survive
-        assert cfg["stt"]["language"] == "en"
-        assert cfg["audio"]["sample_rate"] == 16000
-        assert cfg["providers"]["hyperfurion"]["api_key"] == "hfk_new"
-        assert "# my hand-tuned config" in out  # comment preserved
-
-    def test_existing_key_is_replaced_not_duplicated(self) -> None:
-        existing = "[providers.hyperfurion]\n" 'api_key = "hfk_old"\n'
-        out = _apply_hosted_login(existing, "hfk_fresh")
-        cfg = _parsed(out)
-        assert cfg["providers"]["hyperfurion"]["api_key"] == "hfk_fresh"
-        assert out.count("api_key") == 1  # no duplicate key (invalid TOML)
-
-    def test_key_with_special_chars_is_escaped(self) -> None:
-        out = _apply_hosted_login("", 'weird"\\key')
-        assert _parsed(out)["providers"]["hyperfurion"]["api_key"] == 'weird"\\key'
-
-    def test_idempotent(self) -> None:
-        once = _apply_hosted_login("", "hfk_x")
-        twice = _apply_hosted_login(once, "hfk_x")
-        assert _parsed(twice) == _parsed(once)
+    monkeypatch.setattr("requests.post", boom, raising=False)
+    monkeypatch.setattr("requests.get", boom, raising=False)
+    err = io.StringIO()
+    with redirect_stderr(err), pytest.raises(SystemExit) as exc:
+        _run_login({}, ["someone@example.com"])
+    assert exc.value.code == 2
+    text = err.getvalue().lower()
+    assert "not available" in text
+    assert "http" not in text
 
 
 class TestSetTomlValue:
@@ -68,37 +38,7 @@ class TestSetTomlValue:
         cfg = _parsed(out)
         assert cfg["a"]["x"] == 1 and cfg["b"]["y"] == "z"
 
-
-class TestRelayBase:
-    def test_default_when_unset(self) -> None:
-        assert _relay_base({}) == "https://api.hyperfurion.com"
-
-    def test_custom_base_url_honored(self) -> None:
-        cfg = {"providers": {"hyperfurion": {"base_url": "http://localhost:8787"}}}
-        assert _relay_base(cfg) == "http://localhost:8787"
-
-    def test_v1_suffix_stripped(self) -> None:
-        cfg = {"providers": {"hyperfurion": {"base_url": "https://api.hyperfurion.com/v1"}}}
-        assert _relay_base(cfg) == "https://api.hyperfurion.com"
-
-
-def test_login_says_a_local_kai_turns_off(tmp_path, monkeypatch, capsys) -> None:
-    """Kai on because everything was local: the hosted service forwards to
-    xAI, so Kai turns off at the next start, and login says so."""
-    from voice_keyboard import client
-    from voice_keyboard.config import load_config
-
-    path = tmp_path / "config.toml"
-    path.write_text(
-        '[providers.openai]\nbase_url = "http://127.0.0.1:8000/v1"\n\n'
-        '[stt]\nprovider = "openai"\n\n[tts]\nprovider = "openai"\n\n'
-        '[llm]\nprovider = "openai"\nbase_url = "http://127.0.0.1:8080/v1"\nmodel = "qwen"\n',
-        encoding="utf-8",
-    )
-    before = load_config(path)
-    path.write_text(client._apply_hosted_login(path.read_text(encoding="utf-8"), "hf-key"),
-                    encoding="utf-8")
-    client._say_kai_after_login(before, path)
-    out = capsys.readouterr().out
-    assert "Kai turns off at the next start: the hosted service is online" in out
-    assert "voice-keyboard kai on" in out
+    def test_replaces_without_duplicating(self) -> None:
+        out = _set_toml_value('[providers.xai]\napi_key = "old"\n', "providers.xai", "api_key", "new")
+        assert _parsed(out)["providers"]["xai"]["api_key"] == "new"
+        assert out.count("api_key") == 1

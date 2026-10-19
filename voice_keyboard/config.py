@@ -30,7 +30,7 @@ DEFAULT_CONFIG: dict = {
         },
         "hyperfurion": {
             "api_key": "",
-            # Hosted HyperFurion relay; override for self-hosted relays.
+            # A relay you run yourself. There is no hosted default URL.
             "base_url": "",
         },
         "openai": {
@@ -368,7 +368,7 @@ _FLOW_INT_KEYS = (
 
 PLACEHOLDER_API_KEYS = {
     "xai-your-api-key-here",
-    "hfk-your-subscription-key-here",
+    "hfk-your-key-here",
     "openai-your-api-key-here",
     "groq-your-api-key-here",
     "deepgram-your-api-key-here",
@@ -889,6 +889,16 @@ def validate_config(config: dict) -> None:
         )
     _validate_api_key(config, stt_provider)
     _validate_api_key(config, tts_provider)
+    if stt_provider == "hyperfurion" or tts_provider == "hyperfurion":
+        base_url = str(
+            config.get("providers", {}).get("hyperfurion", {}).get("base_url", "")
+        ).strip()
+        if not base_url:
+            raise RuntimeError(
+                "providers.hyperfurion.base_url is required; there is no hosted "
+                "Hyperfurion service. Set the URL of a relay you run, or choose "
+                "another provider."
+            )
 
     hotword_bias = stt_cfg.get("hotword_bias", False)
     if not isinstance(hotword_bias, bool):

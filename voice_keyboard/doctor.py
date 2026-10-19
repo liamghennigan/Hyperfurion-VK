@@ -310,9 +310,18 @@ def check_speech(config: dict) -> Finding:
     if not local:
         from voice_keyboard.stt import _provider_api_key
 
+        if provider == "hyperfurion":
+            base_url = str(
+                config.get("providers", {}).get("hyperfurion", {}).get("base_url", "")
+            ).strip()
+            if not base_url:
+                return Finding(
+                    FAIL, "speech",
+                    f"{provider} ({where}) has no base_url: there is no hosted service",
+                    "set [providers.hyperfurion] base_url to a relay you run, or pick another provider",
+                )
         if not _provider_api_key(config, provider):
-            fix = ("voice-keyboard login" if provider == "hyperfurion"
-                   else f"set [providers.{provider}] api_key, or run `voice-keyboard setup`")
+            fix = f"set [providers.{provider}] api_key, or run `voice-keyboard setup`"
             return Finding(FAIL, "speech", f"{provider} ({where}) has no API key: every dictation would fail", fix)
     return Finding(OK, "speech", f"{provider} ({where})")
 

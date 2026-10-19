@@ -1,7 +1,7 @@
 """What the installers, the example config and the setup hints tell people
 must be true: the right package and extra to pip install, package names the
-distribution actually has, the hosted subscription shown as not on sale, and
-installer comments that match what the installers do.
+distribution actually has, and installer comments that match what the
+installers do.
 
 install.sh is exercised for real: its blocks run under bash with stub
 package managers that, like dnf5, refuse the whole transaction over one
@@ -81,28 +81,29 @@ def test_example_wake_steps_cover_the_model_download_and_new_pythons():
     assert "bundled" not in EXAMPLE.read_text().split("[wake]\n", 1)[1].split("[daemon]", 1)[0]
 
 
-# ── the hosted subscription in config.toml.example ───────────────────
+# ── hyperfurion in config.toml.example ───────────────────────────────
 
 
-def test_example_lists_the_hosted_provider_last_and_not_on_sale():
+def test_example_hyperfurion_requires_a_base_url_and_is_last():
     text = EXAMPLE.read_text()
     providers = list(tomllib.loads(text)["providers"])
     assert providers[-1] == "hyperfurion", providers
-    block = text.split("[providers.hyperfurion]", 1)[0].rstrip().split("\n\n")[-1]
-    comment = " ".join(line.lstrip("# ") for line in block.splitlines())
-    assert "not on sale right now" in comment
-    assert "existing subscribers only" in comment
+    block = text.split("[providers.hyperfurion]", 1)[1].split("\n[", 1)[0]
+    assert 'base_url = ""' in block
+    comment = text.split("[providers.hyperfurion]", 1)[0].rstrip().split("\n\n")[-1]
+    assert "no hosted" in comment.lower()
+    assert "archive/relay" in comment
 
 
 @pytest.mark.parametrize("table", ["stt", "tts"])
-def test_example_choices_put_the_hosted_service_last(table):
+def test_example_choices_name_hyperfurion_as_a_relay_you_run(table):
     text = EXAMPLE.read_text()
     body = text.split(f"\n[{table}]\n", 1)[1].split("\nprovider", 1)[0]
     choices = " ".join(line.lstrip("# ") for line in body.splitlines())
     assert choices.startswith("Choices: xai")
     names = re.findall(r"\b(xai|hyperfurion|openai|groq|deepgram|assemblyai|elevenlabs)\b", choices)
     assert names[-1] == "hyperfurion" and names.count("hyperfurion") == 1
-    assert "existing subscribers only" in choices
+    assert "base_url required" in choices
 
 
 # ── install.sh: system packages ──────────────────────────────────────
@@ -311,17 +312,13 @@ def test_build_downloads_does_not_call_the_cmd_pinned():
     assert "installs the latest release" in text
 
 
-# ── relay/README.md ──────────────────────────────────────────────────
+# ── the unpublished relay is archived, not a product path ───────────
 
 
-def test_relay_readme_says_not_on_sale_before_any_price():
-    text = (ROOT / "relay/README.md").read_text()
-    assert text.index("not on sale right now") < text.index("$5")
-    tiers = text.split("## Tiers", 1)[1].split("\n## ", 1)[0]
-    assert "not on sale right now" in tiers
-    assert "## Selling subscriptions" not in text
-    assert not re.search(r"\$\d+/mo\b", text), "a per-month price tag reads as an offer"
-    assert "GitHub Sponsors" not in text
-    # The operator documentation is still there.
-    assert "hyperfurion-relay-admin issue" in text
-    assert "STRIPE_WEBHOOK_SECRET" in text
+def test_relay_tree_lives_only_under_archive():
+    assert not (ROOT / "relay").exists()
+    note = (ROOT / "archive/README.md").read_text().lower()
+    assert "not active" in note
+    readme = (ROOT / "archive/relay/README.md").read_text()
+    assert "archived" in readme.lower()
+    assert "hyperfurion-relay-admin issue" in readme

@@ -208,7 +208,7 @@ def test_existing_config_is_edited_in_place(tmp_path):
         "[providers.xai]\napi_key = \"xai-mine\"\n\n[hotkey]\nkey = \"control+alt+v\"\n"
     )
     ask = Script(
-        "4",                # keep speech
+        "3",                # keep speech
         "3", "http://127.0.0.1:8081", "",  # local llm, model from the probe
         "super+h", "hold",  # hotkey
         "de",               # language
@@ -257,14 +257,6 @@ def test_groq_asks_for_a_voice_provider(tmp_path):
     assert config["tts"]["provider"] == "elevenlabs"
     assert config["providers"]["groq"]["api_key"] == "gsk"
     assert config["providers"]["elevenlabs"]["api_key"] == "el"
-
-
-def test_hosted_signs_in_after_saving(tmp_path):
-    calls = []
-    ask = Script("3", "", "", "", "", "", "", "", "", "")
-    wizard, _ = _wizard(tmp_path, ask, login=lambda: calls.append((tmp_path / "config.toml").exists()) or True)
-    assert wizard.run() == 0
-    assert calls == [True]
 
 
 def test_ctrl_c_changes_nothing(tmp_path):

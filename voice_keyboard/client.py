@@ -788,31 +788,31 @@ def _run_intent_cli(client: "IPCClient", extra_args: list[str]) -> None:
         sys.exit(1)
 
 
-# ── hosted sign-in: seamless, no key to lose ─────────────────────────────
-# `voice-keyboard login <email>` proves the subscription email against the
-# relay (one-time code) and writes the (re)issued key into config.toml. Run
-# it any time — a lost key or a new machine just needs another login.
-
-DEFAULT_RELAY_BASE = "https://api.hyperfurion.com"
+# Hosted login is not part of this project. `voice-keyboard login` used to
+# talk to an unpublished relay. The command stays so old instructions fail
+# here, with a short message, instead of contacting a host. Bring your own
+# provider key, or point providers.openai.base_url at a local server.
 
 
-def _relay_base(config: dict) -> str:
-    raw = str(
-        config.get("providers", {}).get("hyperfurion", {}).get("base_url", "") or ""
-    ).strip()
-    base = (raw or DEFAULT_RELAY_BASE).rstrip("/")
-    # The STT/TTS base_url may carry a /v1 suffix; auth lives at the root.
-    if base.endswith("/v1"):
-        base = base[:-3].rstrip("/")
-    return base
+def _run_login(_config: dict, _argv: list) -> None:
+    print(
+        "Hosted login is not available. Hyperfurion VK has no hosted sign-in.",
+        file=sys.stderr,
+    )
+    print(
+        "Use your own provider API key, or point providers.openai.base_url "
+        "at a local OpenAI-compatible server. See config.toml.example.",
+        file=sys.stderr,
+    )
+    sys.exit(2)
 
 
 def _set_toml_value(text: str, table: str, key: str, value) -> str:
     """Set `key = "value"` (or `key = true`) under `[table]` in a TOML
     document, preserving the rest of the file (comments, other tables)
     verbatim. Inserts the key or the whole table if missing. Kept
-    deliberately simple — flat string and boolean keys only (the hosted
-    login and `voice-keyboard setup`)."""
+    deliberately simple — flat string and boolean keys only (`voice-keyboard
+    setup` and the installers)."""
     if isinstance(value, bool):
         line = f"{key} = {'true' if value else 'false'}"
     else:
@@ -837,95 +837,6 @@ def _set_toml_value(text: str, table: str, key: str, value) -> str:
             return "\n".join(lines) + ("\n" if text.endswith("\n") else "")
     lines.insert(start + 1, line)
     return "\n".join(lines) + ("\n" if text.endswith("\n") else "")
-
-
-def _apply_hosted_login(text: str, key: str) -> str:
-    """Return config text with the hosted key + provider selection applied."""
-    text = _set_toml_value(text, "providers.hyperfurion", "api_key", key)
-    text = _set_toml_value(text, "stt", "provider", "hyperfurion")
-    text = _set_toml_value(text, "tts", "provider", "hyperfurion")
-    return text
-
-
-def _write_hosted_login(key: str) -> Path:
-    from voice_keyboard.config import _config_dir, read_config_text
-
-    path = _config_dir() / "config.toml"
-    existing = read_config_text(path) if path.exists() else ""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(_apply_hosted_login(existing, key), encoding="utf-8")
-    return path
-
-
-def _say_kai_after_login(before: dict, path: Path) -> None:
-    """Kai on because everything was local turns off once speech goes
-    through the hosted service (the relay forwards to xAI): say so."""
-    from voice_keyboard.assistant.locality import kai_state
-
-    try:
-        was = kai_state(before)
-        now = kai_state(load_config(path))
-    except Exception:
-        return
-    if was.on and was.setting == "auto" and not now.on:
-        print(
-            f"  {now.name} turns off at the next start: the hosted service is online (it"
-            " forwards your speech to xAI). To turn it on anyway: voice-keyboard kai on"
-        )
-
-
-def _run_login(config: dict, argv: list) -> None:
-    import requests
-
-    base = _relay_base(config)
-    email = (argv[0].strip() if argv else "") or input(
-        "Email on your subscription: "
-    ).strip()
-    if "@" not in email:
-        print("That doesn't look like an email address.", file=sys.stderr)
-        sys.exit(1)
-
-    try:
-        resp = requests.post(f"{base}/auth/request", json={"email": email}, timeout=20)
-    except requests.RequestException as exc:
-        print(f"Couldn't reach the relay ({base}): {exc}", file=sys.stderr)
-        sys.exit(1)
-    if resp.status_code != 200:
-        print(f"Sign-in request failed: {resp.status_code} {resp.text[:200]}", file=sys.stderr)
-        sys.exit(1)
-
-    print(f"We emailed a 6-digit code to {email} (check spam if it's slow).")
-    code = input("Enter the code: ").strip()
-    try:
-        resp = requests.post(
-            f"{base}/auth/verify", json={"email": email, "code": code}, timeout=20
-        )
-    except requests.RequestException as exc:
-        print(f"Couldn't reach the relay: {exc}", file=sys.stderr)
-        sys.exit(1)
-    if resp.status_code != 200:
-        try:
-            message = resp.json().get("error", resp.text)
-        except ValueError:
-            message = resp.text
-        print(f"Sign-in failed: {message}", file=sys.stderr)
-        sys.exit(1)
-
-    key = str(resp.json().get("api_key", ""))
-    if not key:
-        print("The relay didn't return a key — try again.", file=sys.stderr)
-        sys.exit(1)
-    path = _write_hosted_login(key)
-    print(f"✓ Signed in. Key saved to {path}; speech + dictation set to the hosted service.")
-    _say_kai_after_login(config, path)
-    if sys.platform == "win32":
-        print("  Apply it:  right-click the HyperFurion VK tray icon → Restart")
-        print("             (if it was waiting for setup, it starts by itself)")
-    elif sys.platform == "darwin":
-        print(f"  Apply it:  restart the daemon — {_daemon_start_hint()}")
-    else:
-        print("  Apply it:  systemctl --user restart voice-keyboard-daemon")
-    print("  Lost your key or on a new machine? Just run `voice-keyboard login` again.")
 
 
 # ── `voice-keyboard kai [on|off]`: Kai's state, and the one place to change it ─
@@ -1261,13 +1172,12 @@ def main() -> None:
 
         sys.exit(setup_main())
 
+    if args.command == "login":
+        _run_login({}, args.args)
+        return
+
     config = load_config()
     global _overlay_endpoint
-
-    if args.command == "login":
-        # Talks to the relay over HTTP + writes config — never the daemon.
-        _run_login(config, args.args)
-        return
 
     if args.command == "devices":
         _run_devices()
