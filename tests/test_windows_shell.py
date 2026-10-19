@@ -993,7 +993,13 @@ class TestWindowsConfigDefaults:
             return real_write(self, written["text"], encoding=encoding)
 
         monkeypatch.setattr(pathlib.Path, "write_text", windows_write)
-        client._write_hosted_login("hfk-real")
+        from voice_keyboard.config import read_config_text
+
+        existing = read_config_text(tmp_path / "config.toml")
+        (tmp_path / "config.toml").write_text(
+            client._set_toml_value(existing, "providers.xai", "api_key", "xai-real"),
+            encoding="utf-8",
+        )
         assert tomllib.loads(written["text"].replace("\r\n", "\n"))  # still TOML
         assert "\r\r" not in written["text"]
 
@@ -1066,7 +1072,7 @@ class TestAppSetupMode:
     def test_no_config_is_setup_mode(self, app) -> None:
         _, instance, _ = app
         config, reason = instance._load()
-        assert config is None and "sign in" in reason
+        assert config is None and "speech key" in reason
 
     def test_starter_config_asks_for_a_key(self, app) -> None:
         app_mod, instance, tmp_path = app

@@ -150,7 +150,6 @@ class Wizard:
         out: Callable[[str], None] = print,
         detect: Callable[..., Optional[LlamaServer]] = detect_llama_cpp,
         probe: Callable[..., Optional[LlamaServer]] = probe_llama_cpp,
-        login: Optional[Callable[[], bool]] = None,
     ):
         self.path = path
         self._ask = ask
@@ -158,9 +157,7 @@ class Wizard:
         self.out = out
         self._detect = detect
         self._probe = probe
-        self._login = login or _hosted_login
         self.edits: list = []  # (table, key, value, label or "")
-        self.hosted = False
         self.llm_from_llama = False
 
     # ------------------------------------------------------------ prompts
@@ -235,9 +232,6 @@ class Wizard:
             self.out("")
             self.out("Setup cancelled; nothing was changed.")
             return 1
-        if self.hosted and not self._login():
-            self.out("    Sign-in did not finish. Run `voice-keyboard login` later to finish it.")
-            self.say_kai()
         self.finish()
         return 0
 
@@ -315,22 +309,16 @@ class Wizard:
         stt_now = str(current.get("stt", {}).get("provider", "xai"))
         configured = _has_key(current, stt_now)
         keep = f"Keep the current setup ({stt_now})" if configured else "Skip for now (set it up later)"
-        # The hosted subscription isn't on sale: it comes last and is
-        # labelled for the people who already have one.
         choice = self.choose(
             "How should your speech be transcribed?",
             [
                 "My own API key (xAI, OpenAI, Groq, Deepgram, AssemblyAI)",
                 "A local OpenAI-compatible speech server (Speaches, whisper.cpp - no key; audio goes only to it)",
-                "HyperFurion hosted service - existing subscribers only (it isn't on sale)",
                 keep,
             ],
-            4,
+            3,
         )
-        if choice == 3:
-            self.hosted = True
-            self.edits.append(("", "", None, "Speech: HyperFurion hosted (you sign in after saving)"))
-        elif choice == 1:
+        if choice == 1:
             stt = self.pick("Speech-to-text provider", STT_PROVIDERS, "xai")
             self.set("stt", "provider", stt, f"Speech-to-text: {stt}")
             key = self.secret(f"{stt} API key")
@@ -489,9 +477,6 @@ class Wizard:
                     child = node[part] = {}
                 node = child
             node[key] = value
-        if self.hosted:
-            planned.setdefault("stt", {})["provider"] = "hyperfurion"
-            planned.setdefault("tts", {})["provider"] = "hyperfurion"
         return planned
 
     def step_kai(self, current: dict) -> None:
@@ -640,21 +625,6 @@ class Wizard:
         except Exception:
             pass
 
-    def say_kai(self) -> None:
-        """Kai's state from the saved file (after a sign-in that didn't
-        finish, it is not what the question assumed)."""
-        try:
-            from voice_keyboard.assistant.locality import kai_state, turn_on_hint
-            from voice_keyboard.config import load_config
-
-            state = kai_state(load_config(self.path))
-        except Exception:
-            return
-        line = f"    {state.name} is {state.why()}"
-        if not state.on and state.setting != "off" and state.can_answer:
-            line += f" (to turn it on: {turn_on_hint()})"
-        self.out(line)
-
     def finish(self) -> None:
         from voice_keyboard.config import is_usable
 
@@ -666,8 +636,7 @@ class Wizard:
             self.out("`voice-keyboard doctor` checks the microphone, typing and the daemon.")
         else:
             self.out("Saved, but HyperFurion VK can't start yet: it still needs a speech provider.")
-            self.out("Run `voice-keyboard setup` again to add a key or your own server")
-            self.out("(existing subscribers to the hosted service: `voice-keyboard login`).")
+            self.out("Run `voice-keyboard setup` again to add a key or your own server.")
         self.out("Change these any time with `voice-keyboard setup`, or edit the settings file.")
         if sys.platform == "darwin":
             from voice_keyboard.macos.permissions import checklist_lines
@@ -689,19 +658,6 @@ def _has_key(config: dict, provider: str) -> bool:
     try:
         _validate_api_key(config, provider)
     except RuntimeError:
-        return False
-    return True
-
-
-def _hosted_login() -> bool:
-    from voice_keyboard.client import _run_login
-    from voice_keyboard.config import load_config
-
-    try:
-        _run_login(load_config(), [])
-    except SystemExit as exc:
-        return not exc.code
-    except (EOFError, KeyboardInterrupt):
         return False
     return True
 

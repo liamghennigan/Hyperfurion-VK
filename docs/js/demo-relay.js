@@ -44,17 +44,17 @@ export const AudioOut = (() => {
   return { unlock, play, level };
 })();
 
-// ═══ DEMO — the hosted relay: real xAI engines, opt-in, always labeled ═════
-// The page never touches the network on its own. Every request here
-// happens because you pressed a button in the hosted-engine sheet (check
-// the relay, ask, hear it) or tapped the mic after switching the relay on
-// there — and only ever to the relay host below. `?relay=http://…`
-// overrides the host (a test rig's; the page's CSP allows only
-// api.hyperfurion.com).
+// ═══ DEMO — no hosted relay ════════════════════════════════════════════════
+// This page does not contact a Hyperfurion server. `?relay=` used to point
+// a local experiment at a relay; with no value, nothing here fetches.
 export const Demo = (() => {
-  const base = new URLSearchParams(location.search).get("relay") || "https://api.hyperfurion.com";
+  const base = (new URLSearchParams(location.search).get("relay") || "").replace(/\/$/, "");
   const D = { want: false, status: null, base, wsBase: base.replace(/^http/, "ws") };
   D.check = async () => {
+    if (!base) {
+      D.status = { live: false, reason: "no relay configured" };
+      return D.status;
+    }
     try {
       const r = await fetch(base + "/v1/demo/status", { signal: AbortSignal.timeout(4000) });
       D.status = await r.json();
@@ -63,6 +63,7 @@ export const Demo = (() => {
   };
   D.armed = () => D.want && !!(D.status && D.status.live);
   D.tts = async (text) => {
+    if (!base) throw new Error("no relay configured");
     const r = await fetch(base + "/v1/demo/tts", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ text }),
@@ -74,6 +75,7 @@ export const Demo = (() => {
     return r.blob();
   };
   D.ask = async (question) => {
+    if (!base) throw new Error("no relay configured");
     const r = await fetch(base + "/v1/demo/ask", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ question }),

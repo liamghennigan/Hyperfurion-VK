@@ -63,7 +63,8 @@ def test_llm_features_without_llm_fail(monkeypatch) -> None:
 def test_a_cloud_provider_without_a_key_is_a_failure() -> None:
     finding = doctor.check_speech({"stt": {"provider": "deepgram"}, "providers": {"deepgram": {"api_key": ""}}})
     assert finding.status == doctor.FAIL and "[providers.deepgram] api_key" in finding.fix
-    assert doctor.check_speech({"stt": {"provider": "hyperfurion"}}).fix == "voice-keyboard login"
+    hyper = doctor.check_speech({"stt": {"provider": "hyperfurion"}})
+    assert hyper.status == doctor.FAIL and "base_url" in hyper.fix
     keyed = doctor.check_speech({"stt": {"provider": "deepgram"}, "providers": {"deepgram": {"api_key": "k"}}})
     assert keyed.status == doctor.OK
 

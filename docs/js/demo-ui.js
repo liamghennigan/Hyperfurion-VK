@@ -1,12 +1,6 @@
-// ═══ DEMO UI — the hosted relay, as a visible opt-in ══════════════════════
-// The page never touches the network on its own, and opening this sheet
-// doesn't either: the sheet says what each control sends and where, and
-// nothing leaves until a button in it is pressed. "check the relay" asks
-// api.hyperfurion.com whether the hosted demo is up (one GET with nothing
-// you said or typed in it); only a live answer unlocks the switch, the
-// question box and the voice button. The switch sends ONE dictation and
-// turns itself off. The footer counts each request this sheet sends
-// (measure.js).
+// ═══ DEMO UI — leftover sheet, not offered on the page ═════════════════════
+// The landing page no longer has a button that opens this. If the elements
+// are absent, this module does nothing and never fetches.
 import { $ } from "./env.js";
 import { bus } from "./bus.js";
 import { Demo, AudioOut } from "./demo-relay.js";
@@ -44,7 +38,7 @@ export const DemoUI = (() => {
   function open() {
     if (sheet.showModal) sheet.showModal(); else sheet.setAttribute("open", "");
     if (!Demo.status) {
-      status.textContent = "Not checked: nothing has been sent. “check the relay” asks api.hyperfurion.com whether the hosted demo is up today — one request, with nothing you said or typed in it (like any request, it shows the server your IP address).";
+      status.textContent = "Nothing has been sent. This page has no hosted engine.";
       unlock(false);
       check.focus();
     }

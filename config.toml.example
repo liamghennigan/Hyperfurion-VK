@@ -20,18 +20,17 @@ api_key = "assemblyai-your-api-key-here"
 [providers.elevenlabs]
 api_key = "elevenlabs-your-api-key-here"
 
-# Hyperfurion hosted service: not on sale right now (existing subscribers
-# only), so it comes last. See relay/README.md. A subscriber runs
-# `voice-keyboard login <email>`, which emails a sign-in code, fills in this
-# key and switches stt/tts here; logging in again replaces a lost key.
+# A relay you run yourself. There is no hosted Hyperfurion service, so
+# base_url is required when you select this provider. Bring your own key
+# or a local server for normal use. The unpublished relay tree is in
+# archive/relay/ and is not part of the product.
 [providers.hyperfurion]
-api_key = "hfk-your-subscription-key-here"
-# Only set base_url if you run your own relay.
-# base_url = "https://api.hyperfurion.com"
+api_key = "hfk-your-key-here"
+base_url = ""
 
 [stt]
-# Choices: xai, openai, groq, deepgram, assemblyai, and hyperfurion (the
-# hosted service; existing subscribers only)
+# Choices: xai, openai, groq, deepgram, assemblyai, and hyperfurion (a
+# relay you run; base_url required)
 provider = "xai"
 # Defaults by provider:
 # xai / hyperfurion = the provider's default (grok-voice-transcribe-2.0)
@@ -50,8 +49,8 @@ interim_results = true
 hotword_bias = false
 
 [tts]
-# Choices: xai, openai, elevenlabs, hyperfurion (the hosted service;
-# existing subscribers only), and none (nothing speaks: read-aloud is off
+# Choices: xai, openai, elevenlabs, hyperfurion (a relay you run; base_url
+# required), and none (nothing speaks: read-aloud is off
 # and Kai shows its answers on screen; for a local speech server that only
 # transcribes, such as whisper.cpp)
 provider = "xai"

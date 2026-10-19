@@ -5,6 +5,15 @@ All notable changes to HyperFurion VK. The format follows
 [semantic versioning](https://semver.org/). A version bump in `pyproject.toml`
 on `main` cuts the GitHub release automatically.
 
+## [Unreleased]
+
+### Changed
+
+- The unpublished relay is parked under `archive/relay/` and is not part of
+  the product, CI, or the install path. `voice-keyboard login` refuses.
+  The `hyperfurion` provider has no hosted default URL. Bring-your-own-key
+  and local servers are unchanged.
+
 ## [2.4.0] — 2026-10-10
 
 The landing page becomes a real text field, and the engine it runs is
@@ -545,14 +554,8 @@ on (see Changed).
 - `doctor` no longer calls a self-hosted HyperFurion relay on localhost
   "local" (it forwards to xAI), nor a host name that merely looks like a
   local address.
-- **Setup leads with your own key or server.** `voice-keyboard setup` lists
-  the hosted subscription, which isn't on sale, after a key and a local
-  server, labelled for existing subscribers; the Windows tray's sign-in
-  item, now below **Open settings file**, the Windows starter settings
-  file and `config.toml.example` (which lists the hosted provider last)
-  say the same, and so does the relay's README, which no longer reads as
-  an offer of a $5/month subscription.
-  Choosing a local speech server now asks for the model ids it serves and
+- **Setup leads with your own key or server.** Choosing a local speech
+  server now asks for the model ids it serves and
   whether it also speaks, instead of leaving OpenAI's names in place and
   `[tts]` pointed at a server that may only transcribe (whisper.cpp). If it
   doesn't speak, setup asks what should: nothing for now (the default,
@@ -593,8 +596,7 @@ on (see Changed).
   your device and says so before it would use an online one; each "try
   saying" chip plays alone on an empty field under a "scripted demo"
   badge; a Mac gets the beta's install-from-a-checkout steps first; and
-  the relay's fact sheet for the page's "ask" is rewritten for 2.4.0 (it
-  offered a $5/month tier and an old install line).
+  the page's "ask" fact sheet is rewritten for 2.4.0.
 
 ## [2.3.0] — 2026-10
 

@@ -1,7 +1,7 @@
 // ═══ KEYBOARD — the 3D board: 82 keycaps that press themselves ═══════════
 // DOM keycaps under one CSS 3D transform (crisp legends; a press is a
 // transform, nothing repaints). The board is still; only presses move.
-// The Typist hands this module a queue of presses; one Ticker subscriber
+// The Typist hands this module a queue of presses; one Ticker listener
 // drains it at a human cadence. A navigation command appends a chord —
 // modifiers held, one key tapped — the way the daemon's press_combo does.
 // The Enter key is guarded in code: the page can light it, never press it

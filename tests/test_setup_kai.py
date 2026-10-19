@@ -76,7 +76,7 @@ def _homes(tmp_path, monkeypatch):
     monkeypatch.setattr(sys, "platform", "linux")
 
 
-def _run(tmp_path, text: str, kai: str, *, save: bool = True, speech: tuple = ("4",)):
+def _run(tmp_path, text: str, kai: str, *, save: bool = True, speech: tuple = ("3",)):
     """Keep speech and model, Enter through hotkey, mode and language, answer
     `kai`, Enter through the other extras (and save, when asked)."""
     path = tmp_path / "config.toml"
@@ -86,7 +86,7 @@ def _run(tmp_path, text: str, kai: str, *, save: bool = True, speech: tuple = ("
     ask = Script(*answers)
     out: list = []
     wizard = Wizard(path, ask=ask, secret=Script(), out=out.append,
-                    detect=lambda extra=(): None, login=lambda: True)
+                    detect=lambda extra=(): None)
     assert wizard.run() == 0
     assert not ask.answers, f"unused answers: {ask.answers}"
     return path, out, ask.prompts
@@ -201,13 +201,6 @@ def test_online_kai_you_turned_on_can_be_turned_off(tmp_path) -> None:
     assert tomllib.loads(path.read_text())["assistant"]["enabled"] is False
 
 
-def test_the_hosted_choice_counts_as_online(tmp_path) -> None:
-    _path, out, prompts = _run(tmp_path, "", "", speech=("3",))
-    joined = "\n".join(out)
-    assert "hears you:  xAI (through the HyperFurion relay): your recorded" in joined
-    assert "Turn on Kai and send these to xAI?" in _kai_prompt(prompts)
-
-
 def test_kai_never_says_right_ctrl_on_macos(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(sys, "platform", "darwin")
     _path, out, _ = _run(tmp_path, LOCAL, "", save=False)
@@ -242,15 +235,6 @@ def test_setup_records_even_without_changes(tmp_path) -> None:
     record = json.loads(announce.record_path().read_text(encoding="utf-8"))
     assert record == {"setting": "auto", "on": False,
                       "online": {"[stt]": "xAI", "[llm]": "xAI (grok-4.3)", "[tts]": "xAI"}}
-
-
-def test_a_hosted_sign_in_that_fails_says_where_kai_stands(tmp_path) -> None:
-    ask = Script("3", "1", "", "", "", "", "", "", "", "")
-    out: list = []
-    wizard = Wizard(tmp_path / "config.toml", ask=ask, secret=Script(), out=out.append,
-                    detect=lambda extra=(): None, login=lambda: False)
-    assert wizard.run() == 0
-    assert any(line.startswith("    Kai is off") for line in out)
 
 
 def test_turning_on_names_the_history_search_it_would_use(tmp_path) -> None:

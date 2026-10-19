@@ -58,8 +58,7 @@ Sets up a local daemon, the `uinput` virtual keyboard, and a systemd user
 service. Speech goes to a cloud provider with your key (xAI by default;
 OpenAI, Groq, Deepgram or AssemblyAI for speech-to-text, OpenAI or ElevenLabs
 for read-aloud) or to your own local Whisper/OpenAI-compatible server, which
-keeps it offline. The hosted subscription (`voice-keyboard login <email>`, no
-key to manage) is for existing subscribers; it isn't on sale right now.
+keeps it offline.
 
 ### Install on Windows — one line
 
@@ -424,9 +423,8 @@ packaging\windows\install-hyperfurion-vk.ps1 -Source .` installs that checkout
   llama.cpp model offered as your default language model (otherwise xAI's
   Grok or a local server you name), how to transcribe — paste your own API
   key(s) (typed hidden), point at your own local speech server (with the
-  model ids it serves), sign in with an
-  existing hosted subscription (it isn't on sale right now), or skip for
-  now — the hotkey, the language, Kai (where its questions would go, and
+  model ids it serves), or skip for now — the hotkey, the language, Kai
+  (where its questions would go, and
   whether to turn it on), dictation history, caret commands and
   self-corrections, then starts the app. Re-running it upgrades in place and
   keeps your settings (it offers the walkthrough again; Enter skips it).
@@ -481,9 +479,8 @@ written.
 ### First run and settings
 
 If there's no usable config yet (no key, or you skipped the question), the app
-still starts: the tray icon is amber and its menu offers **Open settings file**
-and **Sign in (existing hosted-service subscribers)** (the subscription isn't on
-sale right now), or run `voice-keyboard setup` in a new terminal. Save a valid
+still starts: the tray icon is amber and its menu offers **Open settings file**,
+or run `voice-keyboard setup` in a new terminal. Save a valid
 config and dictation starts on its own — no restart. Provider, audio, and
 hotkey changes later need **Restart** from the menu; Flow/register/LLM changes
 apply at the next recording, and turning Kai on or off in the file within two
@@ -547,8 +544,7 @@ sandboxed away from other apps' input; there is no uinput, no SendInput, no
 event taps. The only sanctioned path is a **custom keyboard extension** — a
 separate Swift app distributed through the App Store, which is a different
 product with a different codebase, not a port of this daemon. It's a
-plausible future project (the relay in `relay/` would slot right in as its
-backend); it is not a checkbox. Nothing on this page will claim iOS
+plausible future project; it is not a checkbox. Nothing on this page will claim iOS
 support until that app exists.
 
 ## First Run Checklist
@@ -607,9 +603,10 @@ On Linux (Windows: [First run and settings](#first-run-and-settings); macOS:
 The daemon listens for the configured hotkey. By default:
 
 - Tap `Ctrl+Alt+V` once to start recording.
-- Tap `Ctrl+Alt+V` again to stop. With xAI (the default), the hosted
-  subscription or a local server, the words have been typing as you spoke and the last ones
-  land now; with OpenAI, Groq, Deepgram or AssemblyAI the whole dictation is
+- Tap `Ctrl+Alt+V` again to stop. With xAI (the default), `hyperfurion`
+  pointed at a relay you run, or a local server, the words have been typing
+  as you spoke and the last ones land now; with OpenAI, Groq, Deepgram or
+  AssemblyAI the whole dictation is
   transcribed and typed when you stop.
 - Hold `Ctrl+Alt+V` for hold-to-talk. Recording starts after the hold threshold
   and stops when you release the keys.
@@ -760,8 +757,8 @@ Flow is on by default. It has two halves:
 - **The pipeline** (all providers): a spoken edit grammar and per-app
   rendering registers applied to every transcript before it is typed.
 - **Live molten injection** (streaming providers: `xai`, a local
-  OpenAI-compatible server via `live_rest`, and `hyperfurion`, the hosted
-  subscription, for existing subscribers): text streams into the focused
+  OpenAI-compatible server via `live_rest`, and `hyperfurion` pointed at a
+  relay you run): text streams into the focused
   field while you speak; other providers type the whole dictation when you
   stop. With a streaming provider, words stay *molten* for a stability
   window (default 1.5 s); when the provider revises a molten word, the
@@ -1258,16 +1255,15 @@ api_key = "assemblyai-your-api-key-here"
 [providers.elevenlabs]
 api_key = "elevenlabs-your-api-key-here"
 
-# Hosted subscription: not on sale right now (existing subscribers only),
-# so it comes last. See relay/README.md.
+# A relay you run yourself. There is no hosted service, so base_url is
+# required when you select this provider.
 [providers.hyperfurion]
-api_key = "hfk-your-subscription-key-here"
-# Only set base_url if you run your own relay.
-# base_url = "https://api.hyperfurion.com"
+api_key = "hfk-your-key-here"
+base_url = ""
 
 [stt]
-# Choices: xai, openai, groq, deepgram, assemblyai, and hyperfurion (the
-# hosted service; existing subscribers only)
+# Choices: xai, openai, groq, deepgram, assemblyai, and hyperfurion (a
+# relay you run; base_url required)
 provider = "xai"
 # Leave empty for the provider default.
 model = ""
@@ -1275,8 +1271,8 @@ language = "en"
 interim_results = true
 
 [tts]
-# Choices: xai, openai, elevenlabs, hyperfurion (the hosted service;
-# existing subscribers only), and none (nothing speaks)
+# Choices: xai, openai, elevenlabs, hyperfurion (a relay you run; base_url
+# required), and none (nothing speaks)
 provider = "xai"
 # Leave empty for the provider default.
 model = ""
@@ -1328,7 +1324,7 @@ without code changes.
 | Provider | Config value | Default model |
 | --- | --- | --- |
 | xAI (default) | `xai` | Provider default. |
-| Hyperfurion (hosted; existing subscribers) | `hyperfurion` | Provider default. |
+| Hyperfurion (a relay you run) | `hyperfurion` | Provider default. |
 | OpenAI | `openai` | `gpt-4o-transcribe` |
 | Groq | `groq` | `whisper-large-v3-turbo` |
 | Deepgram | `deepgram` | `nova-3` |
@@ -1350,7 +1346,7 @@ billed.
 | Provider | Config value | Default model | Default voice |
 | --- | --- | --- | --- |
 | xAI (default) | `xai` | Provider default. | `eve` |
-| Hyperfurion (hosted; existing subscribers) | `hyperfurion` | Provider default. | `eve` |
+| Hyperfurion (a relay you run) | `hyperfurion` | Provider default. | `eve` |
 | OpenAI | `openai` | `gpt-4o-mini-tts` | `coral` |
 | ElevenLabs | `elevenlabs` | `eleven_multilingual_v2` | `JBFqnCBsd6RMkjVDRZzb` |
 
@@ -1430,23 +1426,21 @@ Open models and servers that work well locally:
 | [whisper.cpp](https://github.com/ggml-org/whisper.cpp) | CPU-only and edge boxes; no GPU required. Start `whisper-server` with `--inference-path /v1/audio/transcriptions` so it answers at the path OpenAI's API uses. |
 | [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) | Small, high-quality open TTS voice (what Speaches serves). |
 
-### The Hyperfurion Subscription Provider
+### A relay you run (`hyperfurion`)
 
-`hyperfurion` is the hosted subscription, and it isn't on sale right now:
-this provider is for existing subscribers, and for anyone who runs their own
-relay. It buys convenience, not capability. Every feature of Hyperfurion VK
-is open source and free forever — with your own provider API key or a local
-server you have all of it, and paying unlocks nothing. A subscription is a
-single `hfk_` key instead of a provider account (`voice-keyboard login
-<email>` emails a subscriber a sign-in code and writes the key), with xAI
-STT/TTS behind a metered relay; what's left over after upstream costs funds
-the project's development. It speaks the same streaming protocol as `xai`, so
-behavior is identical from the daemon's side. Audio for this provider
-transits the relay on its way to xAI; it is held in memory only and never
-written to disk. For Kai the relay counts as online, so a Kai that was on
-because everything ran locally turns off at the next start (`login` says
-so; `voice-keyboard kai on` turns it on anyway). The relay is in `relay/` and is fully self-hostable —
-see `relay/README.md` for tiers, quotas, and deployment.
+`hyperfurion` speaks the same streaming protocol as `xai`, so behavior is
+identical from the daemon's side, but only at a URL you set.
+`providers.hyperfurion.base_url` is required: there is no hosted default.
+Audio for this provider transits that relay on its way to the upstream
+speech service; a relay you did not write may keep it. For Kai the relay
+counts as online, even on `localhost` (it forwards upstream), so a Kai that
+was on because everything ran locally turns off at the next start
+(`voice-keyboard kai on` turns it on anyway).
+
+There is no hosted Hyperfurion service. Bring your own provider key, or a
+local server: that is the whole product. An unpublished relay tree sits in
+`archive/relay/` so its history stays in the repo. It is not installed, not
+run in CI, and not part of Hyperfurion VK.
 
 ## Hotkeys
 
@@ -1833,10 +1827,9 @@ status UI, IPC, playback, and keyboard injection are already local.
   [iOS — Why Not](#ios--why-not-yet)).
 - No speech model ships in the box: bring a key for a speech provider (xAI by
   default) or run a local OpenAI-compatible server (see
-  [Fully Offline](#fully-offline-local-models)). The hosted subscription isn't
-  on sale right now.
-- Words land while you speak only with a streaming provider (xAI, or the
-  hosted subscription) or a local server (re-transcribed every 2.5 seconds); with
+  [Fully Offline](#fully-offline-local-models)).
+- Words land while you speak only with a streaming provider (xAI, or
+  `hyperfurion` pointed at a relay you run) or a local server (re-transcribed every 2.5 seconds); with
   OpenAI's cloud, Groq, Deepgram or AssemblyAI they land when you stop
   talking.
 - uinput injection on Linux types ASCII directly, as the keys of a US layout,
@@ -1921,7 +1914,7 @@ Hyperfurion-VK/
 |       `-- metadata.json
 |-- tests/
 |-- docs/                  # Landing page, with the engine's JavaScript port
-|-- relay/                 # The hosted relay (self-hostable)
+|-- archive/relay/         # Unpublished relay, not a product path
 |-- scripts/               # Corpus and parity-fuzz tools
 |-- config.toml.example
 |-- install.sh

@@ -21,7 +21,6 @@ import ctypes
 import logging
 import logging.handlers
 import os
-import subprocess
 import sys
 import threading
 import time
@@ -38,7 +37,6 @@ MUTEX_NAME = "Local\\HyperFurionVK.Daemon"
 RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
 RUN_VALUE = "HyperFurion VK"
 ERROR_ALREADY_EXISTS = 183
-CREATE_NEW_CONSOLE = 0x00000010
 MB_ICONERROR = 0x10
 MB_ICONINFORMATION = 0x40
 
@@ -51,8 +49,6 @@ STARTER_CONFIG = """\
 # Put your speech provider key below. For your own speech server instead,
 # set [stt] and [tts] provider = "openai", base_url below, and the model
 # names your server knows (`voice-keyboard setup` asks for each of these).
-# Existing hosted-service subscribers can run `voice-keyboard login
-# you@example.com` instead; the subscription isn't on sale.
 
 [stt]
 provider = "xai"        # xai | openai | groq | deepgram | assemblyai | hyperfurion
@@ -323,15 +319,6 @@ def _gui_python() -> str:
     return str(candidate if candidate.exists() else exe)
 
 
-def _console_python() -> str:
-    exe = Path(sys.executable)
-    if exe.name.lower() == "pythonw.exe":
-        candidate = exe.with_name("python.exe")
-        if candidate.exists():
-            return str(candidate)
-    return str(exe)
-
-
 def autostart_command() -> str:
     return f'"{_gui_python()}" -m voice_keyboard.windows'
 
@@ -529,22 +516,6 @@ class WindowsApp:
 
         webbrowser.open(DOCS_URL)
 
-    def _sign_in(self) -> None:
-        """`voice-keyboard login` in its own console window, kept open at
-        the end so the result can be read."""
-        script = (
-            "import sys\n"
-            "sys.argv = ['voice-keyboard', 'login']\n"
-            "from voice_keyboard.client import main\n"
-            "try:\n    main()\nexcept SystemExit:\n    pass\n"
-            "input('\\nPress Enter to close this window...')\n"
-        )
-        subprocess.Popen(
-            [_console_python(), "-c", script],
-            creationflags=CREATE_NEW_CONSOLE,
-            close_fds=True,
-        )
-
     def _request_restart(self) -> None:
         self._restart = True
         daemon = self._daemon
@@ -571,7 +542,6 @@ class WindowsApp:
             read_clipboard=self._action("read_clipboard"),
             open_settings=self._open_settings,
             open_logs=self._open_logs,
-            sign_in=self._sign_in,
             restart=self._request_restart,
             quit=self._request_quit,
             get_autostart=get_autostart,
@@ -593,7 +563,7 @@ class WindowsApp:
         from voice_keyboard.config import load_config, validate_config
 
         if not _config_path().exists():
-            return None, "No settings yet — add a speech key or your own server (subscribers: sign in)"
+            return None, "No settings yet — add a speech key or your own server"
         try:
             config = load_config()
         except Exception as exc:

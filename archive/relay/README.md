@@ -1,9 +1,16 @@
-# HyperFurion relay
+# HyperFurion relay — archived, not active
 
-> **The hosted subscription is not on sale right now.** The hosted relay
-> serves existing subscribers only, and nothing in this README is an offer.
-> It is operator documentation: how the relay meters and authenticates, how
-> to run your own, and how billing is wired up should sales reopen.
+> This directory is parked under `archive/`. The hosted service, Stripe
+> checkout, email login, and `api.hyperfurion.com` demo were never launched.
+> Do not treat this as a live product path. Hyperfurion VK is
+> bring-your-own-key, or a local server. See
+> [`archive/README.md`](../README.md).
+>
+> The notes below are operator documentation for that unpublished service:
+> how it metered and authenticated, how to run a copy yourself, and how
+> billing was wired. Nothing here is an offer.
+
+
 
 A metered subscription relay in front of xAI STT/TTS. Subscribers get one
 `hfk_` key instead of a provider account; the relay authenticates it,
@@ -100,7 +107,7 @@ design.
 ## Run it
 
 ```bash
-cd relay
+cd archive/relay
 pip install .
 export XAI_API_KEY="xai-..."           # your master key
 export RELAY_DB="/var/lib/hyperfurion/relay.db"
@@ -111,7 +118,7 @@ hyperfurion-relay                       # listens on :8787
 Or Docker:
 
 ```bash
-docker build -t hyperfurion-relay relay/
+docker build -t hyperfurion-relay archive/relay/
 docker run -p 8787:8787 -v relay-data:/data \
   -e XAI_API_KEY=xai-... -e STRIPE_WEBHOOK_SECRET=whsec_... hyperfurion-relay
 ```
@@ -197,7 +204,7 @@ provider = "hyperfurion"
 
 ```bash
 pip install aiohttp pytest pytest-asyncio
-python3 -m pytest relay/tests -q
+python3 -m pytest archive/relay/tests -q
 ```
 
 The suite runs a fake xAI upstream and drives the daemon's own streaming

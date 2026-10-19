@@ -19,9 +19,6 @@
 //                you first tap the mic and allow it (./js/stt-local.js)
 //   autopilot -> a scripted demo, only ever started by a click, under a
 //                "scripted demo" badge for its whole run
-//   relay     -> the hosted xAI engines, strictly opt-in behind a sheet
-//                that says what leaves and where; nothing is sent until you
-//                press a button in it
 //   footer    -> counts every file the page asked another server for,
 //                live, names the servers that answered, and says what you
 //                did that caused it (./js/measure.js)
@@ -29,8 +26,9 @@
 // Nothing on this page moves until you do something. Every file under
 // ./js/ is readable and none is minified; the page's own files come from
 // this site. Other servers are reached only after you ask: the model's
-// hosts when you tap the mic and allow it, the relay from its sheet, and your
-// browser's own speech service or an online voice only if you pick one.
+// hosts when you tap the mic and allow it, and your browser's own speech
+// service or an online voice only if you pick one. There is no hosted
+// Hyperfurion engine on this page.
 import { $, reduced } from "./js/env.js";
 import { bus } from "./js/bus.js";
 import { state } from "./js/state.js";

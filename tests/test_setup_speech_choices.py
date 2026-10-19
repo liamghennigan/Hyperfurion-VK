@@ -1,8 +1,7 @@
 """`voice-keyboard setup`, speech step: what a new user is offered first,
 and that the local-server choice produces a config a local server answers.
 
-The hosted subscription isn't on sale, so it is listed after the key and
-local-server options and labelled for existing subscribers. A local
+A new user is offered their own API key or a local server. A local
 OpenAI-compatible server only serves the model ids it has installed, so the
 local choice writes model names instead of leaving the OpenAI defaults.
 """
@@ -41,7 +40,6 @@ def _run(tmp_path, *answers):
         secret=Script(),
         out=out.append,
         detect=lambda extra=(): None,  # no llama.cpp on this machine
-        login=lambda: True,
     )
     return wizard, wizard.run(), out
 
@@ -53,19 +51,18 @@ _REST = ("", "", "", "", "", "", "", "", "")
 
 def _speech_menu(out: list) -> list:
     start = out.index("How should your speech be transcribed?")
-    return [line.strip() for line in out[start + 1:start + 5]]
+    return [line.strip() for line in out[start + 1:start + 4]]
 
 
-def test_hosted_is_last_and_for_existing_subscribers(tmp_path):
+def test_speech_menu_is_a_key_or_a_local_server(tmp_path):
     _, code, out = _run(tmp_path, "", *_REST[:-1])  # skip speech: no changes
     assert code == 0
     menu = _speech_menu(out)
     assert menu[0].startswith("1) My own API key")
     assert menu[1].startswith("2) A local OpenAI-compatible speech server")
-    assert menu[2].startswith("3) HyperFurion hosted service")
-    assert "existing subscribers only" in menu[2]
-    assert "isn't on sale" in menu[2]
-    assert menu[3].startswith("4) Skip for now")
+    assert menu[2].startswith("3) Skip for now")
+    joined = "\n".join(menu)
+    assert "hosted" not in joined.lower()
     # The way out when nothing is set up names the key or server first.
     assert any("add a key or your own server" in line for line in out)
     assert not any("fully offline" in line for line in out)
@@ -149,7 +146,6 @@ def test_local_server_that_does_not_speak_with_a_cloud_voice(tmp_path):
         secret=Script("el-key"),
         out=[].append,
         detect=lambda extra=(): None,
-        login=lambda: True,
     )
     assert wizard.run() == 0
     config = tomllib.loads((tmp_path / "config.toml").read_text())
@@ -179,7 +175,6 @@ def test_a_cloud_voice_drops_the_old_speech_servers_model_and_voice(tmp_path):
         secret=Script("xai-key"),
         out=[].append,
         detect=lambda extra=(): None,
-        login=lambda: True,
     )
     assert wizard.run() == 0
     config = tomllib.loads((tmp_path / "config.toml").read_text())

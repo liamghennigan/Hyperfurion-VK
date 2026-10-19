@@ -1,9 +1,7 @@
 """The Windows tray menu in setup mode (no key yet).
 
-The hosted subscription isn't on sale, so the tray must not steer a new
-user to it: the settings file (a key, or your own server) comes first, and
-the sign-in item says it is for existing subscribers. The Win32 calls are
-stubbed; only the labels and their order are checked.
+A new user is pointed at the settings file (a key, or their own server).
+The Win32 calls are stubbed; only the labels are checked.
 """
 
 from unittest import mock
@@ -25,18 +23,15 @@ def _menu_labels(monkeypatch, setup_message: str, status=None) -> list:
     return [c.args[3] for c in user32.AppendMenuW.call_args_list if c.args[3]]
 
 
-def test_setup_menu_offers_settings_before_hosted_sign_in(monkeypatch):
+def test_setup_menu_offers_the_settings_file(monkeypatch):
     labels = _menu_labels(monkeypatch, "Add your speech provider API key to get started")
-    settings = labels.index("Open settings file…")
-    sign_in = next(i for i, text in enumerate(labels) if text.startswith("Sign in"))
-    assert settings < sign_in
-    assert "existing hosted-service subscribers" in labels[sign_in]
-    assert not any("Sign in to the hosted service" in text for text in labels)
+    assert "Open settings file…" in labels
+    assert not any(text.lower().startswith("sign in") for text in labels)
 
 
 def test_ready_menu_has_no_sign_in(monkeypatch):
     labels = _menu_labels(monkeypatch, "")
-    assert not any(text.startswith("Sign in") for text in labels)
+    assert not any(text.lower().startswith("sign in") for text in labels)
 
 
 def test_kai_off_offers_only_turn_on(monkeypatch):

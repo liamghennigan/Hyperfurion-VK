@@ -381,7 +381,6 @@ class ShellCallbacks:
     read_clipboard: Callable[[], None] = lambda: None
     open_settings: Callable[[], None] = lambda: None
     open_logs: Callable[[], None] = lambda: None
-    sign_in: Callable[[], None] = lambda: None
     restart: Callable[[], None] = lambda: None
     quit: Callable[[], None] = lambda: None
     get_autostart: Callable[[], bool] = lambda: False
@@ -1308,11 +1307,7 @@ class WinShell:
         separator()
         if self._setup_message:
             add(self._setup_message[:80], enabled=False)
-            # A key or your own server is the way in; the hosted
-            # subscription isn't on sale, so its sign-in comes second and
-            # says who it is for.
             add("Open settings file…", self._cb.open_settings)
-            add("Sign in (existing hosted-service subscribers)…", self._cb.sign_in)
         else:
             recording = bool(status.get("recording"))
             add(
