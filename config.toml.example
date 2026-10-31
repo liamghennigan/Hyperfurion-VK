@@ -81,6 +81,11 @@ chunk_ms = 100
 # "default" follows the system's input device. To pin one, run
 # `voice-keyboard devices` and use its name (or any unique part of it).
 device_name = "default"
+# Windows opens WASAPI shared mode. chunk_ms 100 (this default) opens at
+# 20 ms there; any other positive value is the period, floored at 10 ms.
+# wasapi is shared (default), exclusive, or auto. Exclusive locks the
+# endpoint and falls back to shared if the open fails.
+# wasapi = "shared"
 
 [hotkey]
 enabled = true

@@ -52,6 +52,8 @@ def check_audio(config: dict) -> Finding:
     if not devices:
         return Finding(FAIL, "microphone", "no audio input devices", "plug in or enable a microphone")
     wanted = str(config.get("audio", {}).get("device_name", "") or "").strip()
+    if sys.platform == "win32":
+        return _check_audio_windows(devices, wanted)
     if wanted and wanted.lower() != "default":
         matches = [d for d in devices if wanted.lower() in d["name"].lower()]
         if len(matches) != 1:
@@ -64,6 +66,66 @@ def check_audio(config: dict) -> Finding:
         return Finding(WARN, "microphone", "no system default input",
                        'set [audio] device_name (see `voice-keyboard devices`)')
     return Finding(OK, "microphone", default["name"])
+
+
+def _check_audio_windows(devices: list, wanted: str) -> Finding:
+    """Same check as `check_audio`, but a name that exists under several
+    host APIs resolves to the WASAPI input capture will open."""
+    from voice_keyboard.windows.wasapi import InputDevice, select_input
+
+    inputs = []
+    for position, device in enumerate(devices):
+        inputs.append(InputDevice(
+            index=int(device.get("index", position)),
+            name=str(device.get("name") or ""),
+            host_api=str(device.get("host_api") or ""),
+            channels=int(device.get("channels") or 0),
+            default_rate=int(device.get("rate") or 0),
+            is_default=bool(device.get("default")),
+        ))
+    selection = select_input(inputs, wanted or "default")
+    if selection.status == "no-inputs":
+        return Finding(FAIL, "microphone", "no audio input devices", "plug in or enable a microphone")
+    if selection.status == "ambiguous":
+        return Finding(
+            FAIL, "microphone",
+            f'[audio] device_name "{wanted}" matches {len(selection.names)} devices',
+            "pick one from `voice-keyboard devices`",
+        )
+    if selection.device is None:
+        if wanted and wanted.lower() != "default":
+            return Finding(
+                FAIL, "microphone",
+                f'[audio] device_name "{wanted}" matches nothing',
+                "pick one from `voice-keyboard devices`",
+            )
+        return Finding(
+            WARN, "microphone", "no system default input",
+            'set [audio] device_name (see `voice-keyboard devices`)',
+        )
+    return Finding(OK, "microphone", selection.device.name)
+
+
+def check_windows_capture(config: dict, daemon_status: Optional[dict] = None) -> Optional[Finding]:
+    """Windows: the buffer capture will open, or the stream the daemon opened.
+
+    Stream latency is included only when the daemon's capture report has
+    one. The planned line, from config, never invents that number.
+    """
+    if sys.platform != "win32":
+        return None
+    from voice_keyboard.windows.wasapi import format_capture, planned_capture_line
+
+    live = {}
+    if isinstance(daemon_status, dict):
+        raw = daemon_status.get("capture")
+        if isinstance(raw, dict):
+            live = raw
+    detail = format_capture(live)
+    if detail:
+        fallback = str(live.get("fallback") or "").strip()
+        return Finding(WARN if fallback else OK, "capture", detail)
+    return Finding(OK, "capture", planned_capture_line(config))
 
 
 def check_daemon(config: dict, seen: Optional[dict] = None) -> Finding:
@@ -467,11 +529,15 @@ def run(config_path: Path, config: Optional[dict]) -> list[Finding]:
         checks = [lambda: check_speech(config), lambda: check_audio(config),
                   lambda: check_daemon(config, status), lambda: check_llm(config),
                   lambda: check_kai(config, status)] + checks
+        if sys.platform == "win32":
+            checks.insert(3, lambda: check_windows_capture(config, status))
         if sys.platform == "linux":
             checks.append(lambda: check_hotkey(config, status))
     for check in checks:
         try:
             result = check()
+            if result is None:
+                continue
             findings.extend(result if isinstance(result, list) else [result])
         except Exception as exc:  # a broken check never hides the others
             findings.append(Finding(WARN, getattr(check, "__name__", "check"), f"could not run ({exc})"))

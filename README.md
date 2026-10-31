@@ -515,6 +515,23 @@ powershell -ExecutionPolicy Bypass -File "$env:LOCALAPPDATA\HyperFurion-VK\unins
 Add `-Purge` to also delete your settings, history, dictionary and Kai's
 memory.
 
+### Microphone capture
+
+Windows opens the microphone with WASAPI in shared mode. A `chunk_ms` of
+100, the cross-platform default, opens as a 20 ms buffer. Any other
+positive `chunk_ms` is the period, with a floor of 10 ms. `[audio]
+wasapi` is `shared` (the default), `exclusive`, or `auto`. Exclusive mode
+locks the endpoint. If that open fails, capture uses shared mode instead,
+and `voice-keyboard stats` includes the reason. The same line prints the
+buffer and, once a stream has been opened, the input latency PortAudio
+reports for it. That number is PortAudio's figure for the open stream; it
+is not added to the buffer. `voice-keyboard doctor` shows the planned
+buffer, and the opened stream when the running app has reported one.
+When one name is listed under more than one host API, the WASAPI input is
+the one that opens. `voice-keyboard devices` prints the host API beside
+each name. `[audio] device_name` selects an input by its full name or a
+unique part of it.
+
 ### Windows troubleshooting
 
 - **Nothing types into an admin window.** Windows blocks input from normal
@@ -1185,6 +1202,11 @@ non-ASCII is dropped with a warning.
   - speech → screen;
   - stop → settled.
 
+  On Windows it also prints the capture path: WASAPI shared or exclusive,
+  the buffer, and — once a recording has opened the microphone — the
+  input latency PortAudio reports for that stream. That figure is not
+  added to the buffer. `--json` includes it as `capture`.
+
   Add `--json` for the raw numbers. `latency_log = true` under `[flow]`
   also appends them to `latency.jsonl` (numbers, the app and the register;
   never text).
@@ -1283,6 +1305,8 @@ language = "en"
 sample_rate = 16000
 chunk_ms = 100
 device_name = "default"
+# Windows capture. shared (default), exclusive, or auto.
+# wasapi = "shared"
 
 [hotkey]
 enabled = true
@@ -1727,7 +1751,8 @@ device_name = "default"
 ```
 
 Set `device_name` to a full device name or a unique substring of the PortAudio
-input device name. List them (the system default is marked `*`):
+input device name. On Windows a name that also exists under another host API
+opens the WASAPI input. List them (the system default is marked `*`):
 
 ```bash
 voice-keyboard devices
@@ -1890,7 +1915,7 @@ Hyperfurion-VK/
 |   |-- llm.py             # OpenAI-compatible chat client: rewrites, intent, pauses
 |   |-- assistant/         # Kai: brain, memory, xAI voice agent
 |   |-- history.py         # Opt-in dictation ledger
-|   |-- audio_capture.py   # PyAudio microphone capture
+|   |-- audio_capture.py   # Microphone capture (WASAPI on Windows, PyAudio elsewhere)
 |   |-- stt.py             # STT provider clients (+ pseudo-streaming adapter)
 |   |-- tts.py             # TTS provider clients and playback
 |   |-- injector.py        # UInput virtual keyboard + clipboard paste fallback
@@ -1907,7 +1932,8 @@ Hyperfurion-VK/
 |       |-- injector.py    # SendInput typing, key chords, no-Enter guard
 |       |-- hotkey.py      # Low-level keyboard hook (hold-to-talk, bare keys)
 |       |-- clipboard.py   # Native clipboard, snapshot/restore
-|       `-- selection.py   # Copy-the-selection for read-aloud and ask
+|       |-- selection.py   # Copy-the-selection for read-aloud and ask
+|       `-- wasapi.py      # Low-latency WASAPI capture (shared; exclusive falls back)
 |-- gnome-shell/
 |   `-- voice-keyboard-overlay@liam-hennigan/
 |       |-- extension.js   # GNOME Shell near-field overlay + live caption

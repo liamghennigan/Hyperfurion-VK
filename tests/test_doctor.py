@@ -32,6 +32,64 @@ def test_a_broken_check_never_hides_the_others(tmp_path, monkeypatch) -> None:
     assert any("kaput" in f.detail for f in findings)
 
 
+def test_windows_microphone_prefers_wasapi(monkeypatch) -> None:
+    import sys
+
+    import voice_keyboard.client as client
+
+    monkeypatch.setattr(sys, "platform", "win32")
+    devices = [
+        {"name": "USB Mic", "channels": 1, "rate": 48000, "default": True, "host_api": "MME", "index": 0},
+        {"name": "USB Mic", "channels": 1, "rate": 48000, "default": False, "host_api": "Windows WASAPI", "index": 4},
+    ]
+    monkeypatch.setattr(client, "_list_input_devices", lambda: devices)
+    assert doctor.check_audio({"audio": {"device_name": "usb"}}).status == doctor.OK
+    assert doctor.check_audio({"audio": {"device_name": "usb"}}).detail == "USB Mic"
+    ambiguous = [
+        {"name": "USB Mic A", "channels": 1, "rate": 48000, "default": False, "host_api": "Windows WASAPI"},
+        {"name": "USB Mic B", "channels": 1, "rate": 48000, "default": False, "host_api": "Windows WASAPI"},
+    ]
+    monkeypatch.setattr(client, "_list_input_devices", lambda: ambiguous)
+    assert doctor.check_audio({"audio": {"device_name": "mic"}}).status == doctor.FAIL
+
+
+def test_windows_capture_shows_the_opened_stream_or_the_plan(monkeypatch) -> None:
+    import sys
+
+    monkeypatch.setattr(sys, "platform", "win32")
+    live = doctor.check_windows_capture(
+        {"audio": {"chunk_ms": 100, "wasapi": "shared", "device_name": "default"}},
+        {"capture": {
+            "backend": "wasapi",
+            "host_api": "Windows WASAPI",
+            "mode": "shared",
+            "chunk_ms": 20,
+            "device": "USB Mic",
+            "stream_latency_ms": 13.5,
+        }},
+    )
+    assert live is not None and live.status == doctor.OK
+    assert "13.5" in live.detail and "20 ms" in live.detail
+    planned = doctor.check_windows_capture(
+        {"audio": {"chunk_ms": 100, "wasapi": "shared", "device_name": "USB Mic"}},
+        {},
+    )
+    assert planned is not None and planned.status == doctor.OK
+    assert "20 ms" in planned.detail
+    assert "latency" not in planned.detail
+    fallback = doctor.check_windows_capture(
+        {"audio": {}},
+        {"capture": {
+            "backend": "wasapi",
+            "mode": "shared",
+            "chunk_ms": 20,
+            "fallback": "exclusive open failed (busy); using shared",
+        }},
+    )
+    assert fallback is not None and fallback.status == doctor.WARN
+    assert "busy" in fallback.detail
+
+
 def test_device_name_must_match_one_device(monkeypatch) -> None:
     import voice_keyboard.client as client
 

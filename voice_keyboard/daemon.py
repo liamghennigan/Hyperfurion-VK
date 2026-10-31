@@ -270,6 +270,10 @@ class Daemon:
         self._latency = latency.LatencyLog(
             persist=bool(self._config.get("flow", {}).get("latency_log", False))
         )
+        # Last microphone open (WASAPI mode, buffer, stream latency when
+        # PortAudio reported one). Kept after the recording stops so
+        # `voice-keyboard stats` can show it.
+        self._last_capture: dict = {}
         # Speculative TTS: (text, audio) for the last stable selection.
         self._tts_cache: Optional[tuple[str, bytes]] = None
         self._prefetch_watcher: Optional[SelectionWatcher] = None
@@ -1007,6 +1011,7 @@ class Daemon:
                         "summary": self._latency.summary(),
                         "count": len(records),
                         "last": records[-1] if records else None,
+                        "capture": self._capture_payload(),
                     }
 
                 else:
@@ -1061,6 +1066,7 @@ class Daemon:
             "last_text_len": len(self._last_typed),
             "last_error": self._last_error,
             "uptime_s": int(time.monotonic() - self._started_at),
+            "capture": self._capture_payload(),
         }
         listener = self._hotkey_listener
         if (
@@ -1876,6 +1882,7 @@ class Daemon:
                 sample_rate=self._config["audio"]["sample_rate"],
                 chunk_ms=self._config["audio"]["chunk_ms"],
                 device_name=self._config["audio"]["device_name"],
+                wasapi=str(self._config.get("audio", {}).get("wasapi", "shared")),
             )
         try:
             self._audio_capture.start()
@@ -1884,6 +1891,7 @@ class Daemon:
             if probe_task is not None:
                 probe_task.cancel()
             raise
+        self._remember_capture(self._audio_capture)
 
         if self._kai_question_refused():
             if probe_task is not None:
@@ -3300,8 +3308,24 @@ class Daemon:
 
     # ------------------------------------------------------------ streams
 
+    def _remember_capture(self, capture: object) -> None:
+        info = getattr(capture, "info", None)
+        if isinstance(info, dict) and info:
+            self._last_capture = dict(info)
+
+    def _capture_payload(self) -> dict:
+        live = getattr(self._audio_capture, "info", None)
+        if isinstance(live, dict) and live:
+            return dict(live)
+        return dict(self._last_capture)
+
     async def _stream_audio(self) -> None:
-        chunk_ms = float(self._config.get("audio", {}).get("chunk_ms", 100))
+        from voice_keyboard.windows.wasapi import chunk_ms_for_stream
+
+        chunk_ms = chunk_ms_for_stream(
+            self._audio_capture,
+            self._config.get("audio", {}).get("chunk_ms", 100),
+        )
         while self._recording and self._stt_client:
             try:
                 audio_capture = self._audio_capture

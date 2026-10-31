@@ -1,5 +1,6 @@
 import logging
 import queue
+import sys
 import threading
 from typing import Optional
 
@@ -17,10 +18,14 @@ class AudioCapture:
         sample_rate: int = 16000,
         chunk_ms: int = 100,
         device_name: str = "default",
+        wasapi: str = "shared",
     ):
         self._sample_rate = sample_rate
+        self._chunk_ms = chunk_ms
         self._chunk_size = int(sample_rate * chunk_ms / 1000)
         self._device_name = device_name
+        self._wasapi = wasapi
+        self._info: dict = {}
         self._pa: Optional[pyaudio.PyAudio] = None
         self._stream: Optional[pyaudio.Stream] = None
         self._running = False
@@ -34,6 +39,8 @@ class AudioCapture:
         self._reader: Optional[threading.Thread] = None
 
     def _find_device_index(self) -> Optional[int]:
+        if sys.platform == "win32":
+            return self._find_windows_device_index()
         if self._device_name == "default":
             try:
                 return self._pa.get_default_input_device_info()["index"]
@@ -50,32 +57,54 @@ class AudioCapture:
                 return i
         return None
 
+    def _find_windows_device_index(self) -> Optional[int]:
+        """PortAudio fallback: still prefer a WASAPI input over MME."""
+        from voice_keyboard.windows.wasapi import InputDevice, device_error, select_input
+
+        default_index = None
+        try:
+            default_index = self._pa.get_default_input_device_info()["index"]
+        except (OSError, IOError):
+            default_index = None
+        devices = []
+        for index in range(self._pa.get_device_count()):
+            info = self._pa.get_device_info_by_index(index)
+            channels = int(info.get("maxInputChannels") or 0)
+            if channels <= 0:
+                continue
+            host = ""
+            host_index = info.get("hostApi")
+            if host_index is not None:
+                try:
+                    host = str(self._pa.get_host_api_info_by_index(int(host_index)).get("name", ""))
+                except Exception:
+                    host = ""
+            devices.append(InputDevice(
+                index=index,
+                name=str(info.get("name") or ""),
+                host_api=host,
+                channels=channels,
+                default_rate=int(float(info.get("defaultSampleRate") or 0)),
+                is_default=index == default_index,
+            ))
+        selection = select_input(devices, self._device_name)
+        if selection.device is None:
+            raise device_error(selection, self._device_name)
+        return selection.device.index
+
     def start(self) -> None:
         with self._lock:
             if self._running:
                 return
-            self._pa = pyaudio.PyAudio()
-            device_index = self._find_device_index()
-            if device_index is None:
-                self._pa.terminate()
-                self._pa = None
-                if self._device_name == "default":
-                    raise RuntimeError(
-                        "No microphone found — connect one or set a default"
-                        " input device in your sound settings"
-                    )
-                raise RuntimeError(
-                    f"Input device not found: {self._device_name}"
-                )
+            if sys.platform == "win32":
+                from voice_keyboard.windows.wasapi import prepare_windows_period
 
-            self._stream = self._pa.open(
-                format=pyaudio.paInt16,
-                channels=1,
-                rate=self._sample_rate,
-                input=True,
-                input_device_index=device_index,
-                frames_per_buffer=self._chunk_size,
-            )
+                self._chunk_ms, self._chunk_size = prepare_windows_period(
+                    self._sample_rate, self._chunk_ms
+                )
+                self._open_windows()
+            else:
+                self._open_pyaudio()
             self._queue = queue.Queue()
             self._running = True
             self._reader = threading.Thread(
@@ -84,12 +113,83 @@ class AudioCapture:
                 daemon=True,
             )
             self._reader.start()
+            mode = self._info.get("mode")
             logger.info(
-                "Audio capture started: device=%s, rate=%d, chunk=%d",
-                self._device_name,
+                "Audio capture started: device=%s, rate=%d, chunk=%d%s",
+                self._info.get("device", self._device_name),
                 self._sample_rate,
                 self._chunk_size,
+                f", mode={mode}" if mode else "",
             )
+
+    def _open_windows(self) -> None:
+        from voice_keyboard.windows.wasapi import WasapiUnavailable, open_capture
+
+        try:
+            opened = open_capture(
+                device_name=self._device_name,
+                sample_rate=self._sample_rate,
+                chunk_ms=self._chunk_ms,
+                mode=self._wasapi,
+            )
+        except WasapiUnavailable as exc:
+            logger.warning("WASAPI capture unavailable (%s); using PortAudio", exc)
+            self._open_pyaudio(fallback=f"WASAPI unavailable ({exc}); using PortAudio")
+            return
+        self._chunk_ms = opened.chunk_ms
+        self._chunk_size = opened.frames
+        self._stream = opened.reader
+        self._info = dict(opened.info)
+
+    def _open_pyaudio(self, *, fallback: str = "") -> None:
+        self._pa = pyaudio.PyAudio()
+        try:
+            device_index = self._find_device_index()
+        except Exception:
+            self._pa.terminate()
+            self._pa = None
+            raise
+        if device_index is None:
+            self._pa.terminate()
+            self._pa = None
+            if self._device_name == "default":
+                raise RuntimeError(
+                    "No microphone found — connect one or set a default"
+                    " input device in your sound settings"
+                )
+            raise RuntimeError(
+                f"Input device not found: {self._device_name}"
+            )
+
+        self._stream = self._pa.open(
+            format=pyaudio.paInt16,
+            channels=1,
+            rate=self._sample_rate,
+            input=True,
+            input_device_index=device_index,
+            frames_per_buffer=self._chunk_size,
+        )
+        device_name = self._device_name
+        host_api = ""
+        try:
+            info = self._pa.get_device_info_by_index(device_index)
+            device_name = str(info.get("name") or device_name)
+            host_index = info.get("hostApi")
+            if host_index is not None:
+                host_api = str(self._pa.get_host_api_info_by_index(int(host_index)).get("name", ""))
+        except Exception:
+            logger.debug("reading the opened input name", exc_info=True)
+        self._info = {
+            "backend": "pyaudio",
+            "device": device_name,
+            "sample_rate": self._sample_rate,
+            "chunk_ms": self._chunk_ms,
+            "frames": self._chunk_size,
+        }
+        if host_api:
+            self._info["host_api"] = host_api
+        if fallback:
+            self._info["fallback"] = fallback
 
     def _read_loop(self) -> None:
         try:
@@ -161,8 +261,17 @@ class AudioCapture:
         return self._sample_rate
 
     @property
+    def chunk_ms(self) -> int:
+        return self._chunk_ms
+
+    @property
     def chunk_size(self) -> int:
         return self._chunk_size
+
+    @property
+    def info(self) -> dict:
+        """What the last open actually used. No latency key unless the stream reported one."""
+        return dict(self._info)
 
     @property
     def running(self) -> bool:
