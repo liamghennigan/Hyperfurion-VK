@@ -1,42 +1,33 @@
 // ═══ LOCAL STT — an open-source speech model, in this tab ════════════════
-// Moonshine tiny (27M parameters, MIT) through transformers.js and ONNX
-// Runtime. The device is picked before anything heavy is fetched: WebGPU
-// only when the browser actually hands out a GPU adapter, WebAssembly on
-// the CPU otherwise. If the GPU still fails, a fresh copy of the runtime
-// loads the same model on the CPU — transformers.js 4.3.0 queues every
-// session it creates on one module-wide promise, so after one failure that
-// copy can never create another session.
+// LFM3 Audio (LFM3-Audio-2B, Liquid AI) through ONNX Runtime Web on WebGPU.
+// See lfm3.js for the graphs, the pinned revision and the byte total. The
+// device is picked before anything heavy is fetched: a real WebGPU adapter,
+// or a failure that downloads nothing. There is no CPU copy of this model
+// in the page. If the GPU fails after the download, the session stops and
+// the page offers the browser's own speech service.
 //
 // Nothing is fetched until you tap the mic and the browser lets the page
-// use it. Then the runtime, tokenizer and weights come from jsDelivr and
-// Hugging Face (whose downloads redirect to its CDN), and transformers.js
-// keeps them in this browser's Cache Storage ("transformers-cache"), so a
-// later visit reads them from disk. Audio never leaves the tab.
+// use it. Then the runtime comes from jsDelivr and the tokenizer and weights
+// from Hugging Face (whose downloads redirect to its CDN). Files are kept in
+// this browser's Cache Storage ("lfm3-audio-cache"), so a later visit reads
+// them from disk. Audio never leaves the tab.
 //
-// Capture starts as soon as the mic is granted, before the model is
-// ready: what you say while it loads is held in memory and recognized once
-// it is. Each utterance, closed by ~1.2 s of quiet, is trimmed to its
-// voiced audio (a quarter second before the first voiced frame, 0.3 s
-// after the last) — Moonshine returns nothing at all for a clip that opens
-// on a second or two of silence. While an utterance is open it is
-// re-recognized every half second or so, the way a streaming provider
-// revises its interim results.
+// Capture starts as soon as the mic is granted, before the model is ready:
+// what you say while it loads is held in memory and recognized once it is.
+// Each utterance, closed by ~1.2 s of quiet, is trimmed to its voiced audio
+// (a quarter second before the first voiced frame, 0.3 s after the last) so
+// a quiet lead-in is not what the model transcribes. While an utterance is
+// open it is re-recognized, never more often than a pass takes.
 import { bus } from "./bus.js";
+import { LFM3_BYTES, LFM3_LABEL, loadLfm3, transcribe } from "./lfm3.js";
 
 export const LocalSTT = (() => {
-  const CDN = "https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.0/dist/transformers.min.js";
-  const MODEL = "onnx-community/moonshine-tiny-ONNX";
-  const REVISION = "a6da1241cd305dcd64eab1edbd615f2bb9aabb95";   // pinned, so the sizes below stay true
-  // what each path fetches through transformers.js on a first visit, as
-  // stored (jsDelivr and Hugging Face compress the runtime and tokenizer on
-  // the wire): the ONNX runtime 26.9 MB + tokenizer 3.9 MB + weights, 8-bit
-  // for the CPU (28.2 MB) or 4-bit for the GPU (55.4 MB)
-  const BYTES = { wasm: 59.0e6, webgpu: 86.2e6 };
+  const BYTES = { webgpu: LFM3_BYTES };
   // pct: share of the download that has arrived, while files are arriving
   // (null once they are in, or when everything came from the cache)
-  const S = { state: "idle", device: null, error: "", label: "Moonshine tiny", pct: null, fetched: 0,
+  const S = { state: "idle", device: null, error: "", label: LFM3_LABEL, pct: null, fetched: 0,
               stats: { passes: 0, lastMs: 0, audioSec: 0 } };
-  let pipe = null, loadP = null, copies = 0, gpuBroken = false, fetched = 0, inflight = 0;   // copies: runtime instances made
+  let pipe = null, loadP = null, copies = 0, fetched = 0, inflight = 0;
   const listeners = new Set();
 
   S.supported = () => !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia &&
@@ -49,6 +40,7 @@ export const LocalSTT = (() => {
     if (/out of memory|allocation failed|memory/i.test(m)) return "this device ran out of memory loading it";
     if (/fetch|network|import|load failed|could not locate|status|cors|security polic|40\d|50\d/i.test(m))
       return "it couldn't be downloaded (you may be offline, or something is blocking cdn.jsdelivr.net or huggingface.co)";
+    if (/no WebGPU adapter/i.test(m)) return "this browser has no WebGPU GPU, which LFM3 Audio needs";
     if (/webgpu|gpu|adapter/i.test(m)) return "this browser's GPU support failed while running it";
     if (/wasm|webassembly|backend/i.test(m)) return "this browser couldn't start the WebAssembly runtime it needs";
     return "this browser couldn't run it";
@@ -56,7 +48,7 @@ export const LocalSTT = (() => {
 
   let lastByte = 0, settleT = 0;
   function report() {
-    const total = BYTES[S.device] || BYTES.wasm;
+    const total = BYTES.webgpu;
     S.fetched = fetched;
     // a moment between two files is still downloading; after that it isn't
     const downloading = inflight > 0 || performance.now() - lastByte < 500;
@@ -65,70 +57,87 @@ export const LocalSTT = (() => {
     for (const f of listeners) { try { f(S); } catch {} }
     bus.emit("stt:progress", { state: S.state, device: S.device, pct: S.pct });
   }
-  // every file a runtime copy fetches passes through here, so the progress
-  // shown is bytes that really arrived for the model being loaded (files
-  // read from Cache Storage never come through: nothing is downloaded for
-  // them). A copy that failed has its downloads cancelled.
-  // It also notes the host that finally answered: Hugging Face redirects
-  // its downloads to its CDN (us.aws.cdn.hf.co, say), and the browser's
-  // own request list names only the address asked for, so the footer
-  // learns the CDN's name here.
+  // every file the runtime fetches passes through here, so the progress
+  // shown is bytes that really arrived (a Cache Storage hit never comes
+  // through: nothing is downloaded for it). The host that finally answered
+  // is noted too:
+  // Hugging Face redirects its downloads to its CDN, and the browser's
+  // own request list names only the address asked for.
   const hosts = new Set();
-  function fetcher(id, signal) {
-    return async (input, init) => {
-      const res = await fetch(input, { ...(init || {}), signal });
+  const MODEL_HOST = (h) => h === "cdn.jsdelivr.net" || /(^|\.)(huggingface\.co|hf\.co)$/.test(h);
+  function watchFetch(id) {
+    const orig = globalThis.fetch.bind(globalThis);
+    let box = null;
+    const cache = () => {
+      if (typeof caches === "undefined") return Promise.resolve(null);
+      return box || (box = caches.open("lfm3-audio-cache").catch(() => null));
+    };
+    globalThis.fetch = async (input, init) => {
+      let url = "";
+      try { url = typeof input === "string" ? new URL(input, location.href).href : input.url; } catch {}
+      let model = false;
+      try { model = !!(url && MODEL_HOST(new URL(url).hostname)); } catch {}
+      if (!model) return orig(input, init);
       try {
-        const h = new URL(res.url).hostname;
+        const store = await cache();
+        const hit = store && await store.match(url);
+        if (hit) return hit;
+      } catch {}
+      const res = await orig(input, init);
+      try {
+        const h = new URL(res.url || url).hostname;
         if (h && !hosts.has(h)) { hosts.add(h); bus.emit("stt:host", { host: h, redirected: !!res.redirected }); }
       } catch {}
       if (id !== copies || !res.body || res.status !== 200) return res;
       let last = -1, open = true;
       const done = () => { if (open && id === copies) { open = false; inflight--; report(); } };
       inflight++;
+      const [branch, saved] = res.body.tee();
       const counter = new TransformStream({
         transform(chunk, ctl) {
           if (id === copies) {
             fetched += chunk.byteLength; lastByte = performance.now();
-            const pct = Math.floor((100 * fetched) / (BYTES[S.device] || BYTES.wasm));
+            const pct = Math.floor((100 * fetched) / BYTES.webgpu);
             if (pct !== last) { last = pct; report(); }
           }
           ctl.enqueue(chunk);
         },
         flush: done,
+        cancel: done,
       });
-      const out = new Response(res.body.pipeThrough(counter), { status: res.status, statusText: res.statusText, headers: res.headers });
+      const out = new Response(branch.pipeThrough(counter), { status: res.status, statusText: res.statusText, headers: res.headers });
       try { Object.defineProperty(out, "url", { value: res.url }); } catch {}
+      const drain = async (stream) => {
+        try {
+          const reader = stream.getReader();
+          for (;;) { const { done } = await reader.read(); if (done) break; }
+        } catch {}
+      };
+      cache().then((store) => store
+        ? store.put(url, new Response(saved, { status: res.status, headers: res.headers })).catch(() => drain(saved))
+        : drain(saved)).catch(() => drain(saved));
       return out;
     };
+    return () => { globalThis.fetch = orig; };
   }
 
   // WebGPU only with a real adapter: Chrome exposes navigator.gpu even
   // where WebGPU is off (by default on Linux) and then has no adapter
   async function pickDevice() {
-    if (gpuBroken || !navigator.gpu) return "wasm";
+    if (!navigator.gpu) return null;
     try {
       const adapter = await Promise.race([navigator.gpu.requestAdapter(), new Promise((r) => setTimeout(() => r(null), 3000))]);
-      return adapter ? "webgpu" : "wasm";
-    } catch { return "wasm"; }
+      return adapter ? "webgpu" : null;
+    } catch { return null; }
   }
-  async function open(device) {
-    // a fresh module instance on every retry: the first copy's session
-    // queue stays rejected after a failure
-    const id = ++copies, ac = new AbortController();
-    fetched = 0; inflight = 0; S.device = device; report();
+  async function open() {
+    const id = ++copies;
+    fetched = 0; inflight = 0; S.device = "webgpu"; report();
+    const restore = watchFetch(id);
     try {
-      const tf = await import(/* webpackIgnore: true */ CDN + (id > 1 ? "#copy" + id : ""));
-      tf.env.allowLocalModels = false;
-      tf.env.fetch = fetcher(id, ac.signal);
-      // 4-bit weights on the GPU (the quantization WebGPU kernels are built
-      // for), 8-bit on the CPU; neither needs shader-f16
-      const dtype = device === "webgpu"
-        ? { encoder_model: "q4", decoder_model_merged: "q4" }
-        : { encoder_model: "q8", decoder_model_merged: "q8" };
-      const p = await tf.pipeline("automatic-speech-recognition", MODEL, { device, dtype, revision: REVISION });
-      await p(new Float32Array(8000));    // a first pass: warms the kernels, and proves the device works
-      return p;
-    } catch (e) { ac.abort(); throw e; }  // whatever this copy was still downloading is not needed now
+      await loadLfm3();
+      return { textOf: transcribe };
+    } finally { restore(); }
   }
   function load(onProgress) {
     if (pipe) return Promise.resolve(pipe);
@@ -139,12 +148,8 @@ export const LocalSTT = (() => {
     bus.emit("relay:request", {});            // the footer counts what you asked for
     loadP = (async () => {
       const device = await pickDevice();
-      try { pipe = await open(device); }
-      catch (e) {
-        if (device !== "webgpu") throw e;
-        gpuBroken = true;                     // the GPU refused: same model, on the CPU
-        pipe = await open("wasm");
-      }
+      if (!device) throw new Error("no WebGPU adapter");
+      pipe = await open();
       S.state = "ready";
       report();
       return pipe;
@@ -156,15 +161,9 @@ export const LocalSTT = (() => {
     }).finally(() => { listeners.clear(); bus.emit("relay:request", {}); });
     return loadP;
   }
-  // one pass; a GPU that gives out mid-session hands over to the CPU
   async function recognize(audio) {
-    try { return await pipe(audio); }
-    catch (e) {
-      if (S.device !== "webgpu") throw e;
-      gpuBroken = true; pipe = null; loadP = null;
-      await load();
-      return pipe(audio);
-    }
+    const text = await pipe.textOf(audio);
+    return { text };
   }
 
   // ── capture: the mic at 16 kHz, off the main thread where possible ─────
