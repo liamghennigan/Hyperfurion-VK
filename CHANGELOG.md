@@ -7,6 +7,17 @@ on `main` cuts the GitHub release automatically.
 
 ## [Unreleased]
 
+### Added
+
+- **Windows microphone capture uses WASAPI shared mode.** A `chunk_ms` of
+  100 opens at a 20 ms buffer; any other positive value is the period,
+  floored at 10 ms. `[audio] wasapi` is `shared` (default), `exclusive`,
+  or `auto`. Exclusive locks the endpoint, and a failed exclusive open
+  falls back to shared. When WASAPI itself is missing, capture uses
+  PortAudio and still prefers a WASAPI input if one is listed. `voice-keyboard
+  stats` and `doctor` report the buffer and, once a stream has been opened,
+  the latency PortAudio reports for it.
+
 ### Changed
 
 - The unpublished relay is parked under `archive/relay/` and is not part of

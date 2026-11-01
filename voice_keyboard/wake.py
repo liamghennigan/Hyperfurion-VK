@@ -44,6 +44,7 @@ class WakeListener:
         self._threshold = float(wake_cfg.get("threshold", 0.5))
         self._cooldown_s = float(wake_cfg.get("cooldown_s", 2.0))
         self._device = str(wake_cfg.get("mic_device", "")).strip() or "default"
+        self._wasapi = str(config.get("audio", {}).get("wasapi") or "shared")
         self._on_wake = on_wake
         self._is_busy = is_busy
         self._model = None
@@ -113,6 +114,7 @@ class WakeListener:
             sample_rate=WAKE_SAMPLE_RATE,
             chunk_ms=WAKE_CHUNK_MS,
             device_name=self._device,
+            wasapi=self._wasapi,
         )
         try:
             capture.start()

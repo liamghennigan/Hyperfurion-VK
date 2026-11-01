@@ -411,12 +411,21 @@ def _list_input_devices() -> list[dict]:
             info = pa.get_device_info_by_index(index)
             if int(info.get("maxInputChannels", 0)) <= 0:
                 continue
-            devices.append({
+            entry = {
                 "name": str(info.get("name", "")),
                 "channels": int(info.get("maxInputChannels", 0)),
                 "rate": int(info.get("defaultSampleRate", 0)),
                 "default": index == default_index,
-            })
+            }
+            host_index = info.get("hostApi")
+            if host_index is not None:
+                try:
+                    host_api = str(pa.get_host_api_info_by_index(int(host_index)).get("name", ""))
+                except Exception:
+                    host_api = ""
+                if host_api:
+                    entry["host_api"] = host_api
+            devices.append(entry)
         return devices
     finally:
         pa.terminate()
@@ -435,7 +444,9 @@ def _run_devices() -> None:
         return
     for device in devices:
         marker = "*" if device["default"] else " "
-        print(f"{marker} {device['name']}  ({device['channels']} ch, {device['rate']} Hz)")
+        host = str(device.get("host_api") or "")
+        host_bit = f" [{host}]" if host else ""
+        print(f"{marker} {device['name']}{host_bit}  ({device['channels']} ch, {device['rate']} Hz)")
     print('\n* = the system default. Set [audio] device_name = "<name or a unique part>" to choose.')
 
 
@@ -499,6 +510,11 @@ def _run_stats(client: IPCClient, extra_args: list[str]) -> None:
     if "--json" in extra_args:
         print(json.dumps(response, indent=2))
         return
+    from voice_keyboard.windows.wasapi import format_capture
+
+    capture = format_capture(response.get("capture") or {})
+    if capture:
+        print(capture)
     print(f"Last {response.get('count', 0)} dictations:")
     print(format_summary(response.get("summary") or {}))
 

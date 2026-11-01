@@ -82,6 +82,9 @@ DEFAULT_CONFIG: dict = {
         "sample_rate": 16000,
         "chunk_ms": 100,
         "device_name": "default",
+        # Windows capture. shared is the stable low-latency path.
+        # exclusive and auto try exclusive, then fall back to shared.
+        "wasapi": "shared",
     },
     "daemon": {
         "socket_path": "",
@@ -932,6 +935,9 @@ def validate_config(config: dict) -> None:
         raise RuntimeError("audio.sample_rate must be a positive integer")
     if not isinstance(chunk_ms, int) or isinstance(chunk_ms, bool) or chunk_ms <= 0:
         raise RuntimeError("audio.chunk_ms must be a positive integer")
+    wasapi = audio_cfg.get("wasapi", "shared")
+    if not isinstance(wasapi, str) or wasapi.strip().lower() not in {"shared", "exclusive", "auto"}:
+        raise RuntimeError("audio.wasapi must be one of: shared, exclusive, auto")
 
     if not config.get("daemon", {}).get("socket_path"):
         raise RuntimeError("daemon.socket_path is not configured")
