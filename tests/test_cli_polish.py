@@ -55,12 +55,14 @@ class TestDevices:
         monkeypatch.setattr(client, "load_config", lambda: {"daemon": {"socket_path": "x"}})
         monkeypatch.setattr(client, "_list_input_devices", lambda: [
             {"name": "Microphone (Realtek(R) Audio)", "channels": 2, "rate": 44100, "default": True},
-            {"name": "Headset Microphone (Jabra Evolve2 65)", "channels": 1, "rate": 16000, "default": False},
+            {"name": "Headset Microphone (Jabra Evolve2 65)", "channels": 1, "rate": 16000, "default": False,
+             "host_api": "Windows WASAPI"},
         ])
         client.main()
         out = capsys.readouterr().out
         assert "* Microphone (Realtek(R) Audio)" in out
-        assert "  Headset Microphone (Jabra Evolve2 65)" in out
+        assert "[Windows WASAPI]" not in out.split("Headset")[0]
+        assert "  Headset Microphone (Jabra Evolve2 65) [Windows WASAPI]" in out
         assert "device_name" in out
 
     def test_list_skips_outputs(self, monkeypatch) -> None:

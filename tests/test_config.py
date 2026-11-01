@@ -80,6 +80,17 @@ class TestConfigValidation:
         with pytest.raises(RuntimeError, match="providers.xai.api_key is not configured"):
             config.validate_config(cfg)
 
+    def test_wasapi_mode_is_shared_exclusive_or_auto(self) -> None:
+        cfg = config._default_config_with_paths()
+        cfg["xai"]["api_key"] = "test-key"
+        assert cfg["audio"]["wasapi"] == "shared"
+        for mode in ("shared", "exclusive", "auto", "Exclusive"):
+            cfg["audio"]["wasapi"] = mode
+            config.validate_config(cfg)
+        cfg["audio"]["wasapi"] = "mme"
+        with pytest.raises(RuntimeError, match="audio.wasapi"):
+            config.validate_config(cfg)
+
     def test_invalid_sample_rate_raises(self) -> None:
         cfg = config._default_config_with_paths()
         cfg["xai"]["api_key"] = "test-key"
