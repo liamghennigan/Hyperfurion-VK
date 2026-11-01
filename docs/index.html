@@ -10,7 +10,7 @@
        not the page's, so no page policy governs it; the page starts it
        only on that click. No analytics, no cookies, and nothing you say
        is stored. -->
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' blob: https://cdn.jsdelivr.net 'wasm-unsafe-eval'; connect-src 'self' https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; worker-src 'self' blob:; img-src 'self' data:; font-src 'self'; style-src 'self' 'unsafe-inline'; media-src 'self' blob:; base-uri 'self'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' blob: https://cdn.jsdelivr.net 'wasm-unsafe-eval'; connect-src 'self' https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; worker-src 'self' blob: https://cdn.jsdelivr.net; img-src 'self' data:; font-src 'self'; style-src 'self' 'unsafe-inline'; media-src 'self' blob:; base-uri 'self'; form-action 'self'" />
   <meta name="referrer" content="no-referrer" />
   <title>Hyperfurion VK — Your voice is the keyboard</title>
   <meta name="description" content="Open-source voice keyboard for Linux and Windows: press Ctrl+Alt+V, talk, and your words are typed into any app, terminal included. Try it in your browser." />
@@ -115,7 +115,7 @@
             <button class="textbtn" id="autopilot" type="button" aria-pressed="false">watch a scripted demo</button>
           </div>
           <div class="hints" id="hints" aria-label="Things to say"></div>
-          <p class="sigcap stage-note">Speech is recognized in this tab by <a href="https://github.com/moonshine-ai/moonshine" rel="noopener">Moonshine tiny</a> (MIT, Moonshine AI): about 35 MB, downloaded once you tap the mic and allow it (about 62 MB where WebGPU runs it), then kept in your browser's cache. It's a small model, so expect more mishearings than with the app's speech services; this page reads its usual mishearings of “VK” and “spell” (“The K”, “Bell”) as those words. Here, words lock when you pause, and caret commands and “VK, run …” are on; in the app those two are off until you turn them on. Nothing you say leaves this tab. If the model can't run here, the page offers your browser's own speech service, and names it before it starts.</p>
+          <p class="sigcap stage-note">Speech is recognized in this tab by <a href="https://huggingface.co/LiquidAI/LFM3-Audio-2B" rel="noopener">LFM3 Audio</a> (LFM3-Audio-2B, Liquid AI, LFM Open License): about 1.97 GB, downloaded once you tap the mic and allow it, and only where WebGPU can run it, then kept in your browser's cache. There is no in-tab CPU copy — this browser build runs on the GPU — so the download is the tradeoff for a 2 billion parameter model. Liquid reports 6.23% English word error on the Open ASR benchmark; the 27 million parameter Moonshine tiny model this page used before mangled product words. The page still reads “The K” and “Bell”, in a command, as “VK” and “spell”. Here, words lock when you pause, and caret commands and “VK, run …” are on; in the app those two are off until you turn them on. Nothing you say leaves this tab. If the model can't run here, the page offers your browser's own speech service, and names it before it starts.</p>
         </div>
       </div>
     </section>

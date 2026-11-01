@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { readAsMeant } from "../heard.js";
 import { moltenLine, REGISTERS } from "../flow.js";
 
-test("the wake word, as the small model writes it, before an instruction verb", () => {
+test("a misheard wake word before an instruction verb", () => {
   const cases = [
     ["The K make that formal.", "VK, make that formal."],
     ["Dk run find every to do", "VK, run find every to do"],
@@ -16,7 +16,7 @@ test("the wake word, as the small model writes it, before an instruction verb", 
   for (const [heard, meant] of cases) assert.equal(readAsMeant(heard), meant, heard);
 });
 
-test("spell, as the small model writes it, before that and spelled letters", () => {
+test("a misheard spell before that and spelled letters", () => {
   const cases = [
     ["Fill that s, I, o, b, h, a, n.", "spell that s, I, o, b, h, a, n."],
     ["Send the notes to Shiv Bell that s I o b h a n", "Send the notes to Shiv spell that s I o b h a n"],

@@ -14,9 +14,9 @@
 //                grammar, registers, code compilers, "spell that",
 //                navigation, the pause rules; CI replays
 //                tests/flow_corpus.json through both)
-//   stt       -> an open-source speech model (Moonshine tiny) running in
-//                this tab, downloaded from jsDelivr and Hugging Face once
-//                you first tap the mic and allow it (./js/stt-local.js)
+//   stt       -> LFM3 Audio running in this tab on WebGPU, downloaded from
+//                jsDelivr and Hugging Face once you first tap the mic and
+//                allow it (./js/stt-local.js, ./js/lfm3.js)
 //   autopilot -> a scripted demo, only ever started by a click, under a
 //                "scripted demo" badge for its whole run
 //   footer    -> counts every file the page asked another server for,

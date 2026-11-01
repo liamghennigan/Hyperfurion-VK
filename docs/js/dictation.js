@@ -96,9 +96,9 @@ export const Dictation = (() => {
     if (engine === "local") {
       const pct = loadPct();
       if (LocalSTT.state === "ready")
-        return ["Moonshine · in this tab · " + (LocalSTT.device === "webgpu" ? "on your GPU (WebGPU)" : "on your CPU (WebAssembly)"), "live"];
+        return [LocalSTT.label + " · in this tab · on your GPU (WebGPU)", "live"];
       if (LocalSTT.state === "loading")
-        return [(pct != null ? "loading Moonshine into this tab · " + pct + "% downloaded" : "starting Moonshine in this tab") +
+        return [(pct != null ? "loading " + LocalSTT.label + " into this tab · " + pct + "% downloaded" : "starting " + LocalSTT.label + " in this tab") +
                 (D.recording ? " · your words appear when it's ready" : settling ? " · what you said appears when it's ready" : ""), "live"];
       return ["", ""];
     }

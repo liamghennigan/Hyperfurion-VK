@@ -24,7 +24,7 @@ export const Hints = (() => {
       { text: "the fix lands on thursday", pause: 700 }, { text: "scratch that", pause: 700 }, { text: "the fix lands on friday period" }] },
     // a recognizer hears a name it doesn't know as a word it does
     { kind: "spell", say: "spell that s i o b h a n",
-      title: "This page's small speech model often hears “spell” as “bell” or “fill”; before “that” and spelled letters, the page reads those as “spell”.", play: [
+      title: "If the model writes “bell” or “fill” where you said “spell”, before “that” and spelled letters the page reads those as “spell”.", play: [
       { text: "I'll send it to Shivon", pause: 900 }, { text: "spell that s i o b h a n" }] },
     { kind: "select", say: "select previous word", play: [
       { text: "ship it on friday", pause: 900 }, { text: "select previous word", pause: 1100 }, { text: "monday period" }] },
