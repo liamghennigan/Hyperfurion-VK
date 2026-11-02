@@ -164,6 +164,21 @@ async function loadVocab() {
   u2b = bytesToUnicode();
 }
 
+// The graph file is the structure. The weights are a sidecar (`*.onnx_data`)
+// that onnxruntime-web fetches only when `externalData` names it. `path` is
+// the bare filename stored in the graph, not a URL. Without this, session
+// create throws before either weight file is requested.
+export function graphSession(graph, provider) {
+  const weights = graph + ".onnx_data";
+  return {
+    url: BASE + "/onnx/" + graph + ".onnx",
+    options: {
+      executionProviders: [provider],
+      externalData: [{ path: weights, data: BASE + "/onnx/" + weights }],
+    },
+  };
+}
+
 export function loadLfm3() {
   if (ready) return ready;
   ready = (async () => {
@@ -171,12 +186,13 @@ export function loadLfm3() {
     ort.env.wasm.numThreads = 1;
     ort.env.wasm.proxy = false;
     ort.env.wasm.wasmPaths = WASM;
-    const session = { executionProviders: ["webgpu"] };
-    await Promise.all([
-      loadVocab(),
-      ort.InferenceSession.create(BASE + "/onnx/audio_encoder.onnx", session).then((s) => { encoder = s; }),
-      ort.InferenceSession.create(BASE + "/onnx/decoder_q4f16.onnx", session).then((s) => { decoder = s; }),
-    ]);
+    await loadVocab();
+    // The decoder sidecar is 1.41 GB and the encoder's is 0.51 GB. Loading
+    // the decoder after the encoder keeps both from sitting in the heap at once.
+    const enc = graphSession("audio_encoder", "webgpu");
+    encoder = await ort.InferenceSession.create(enc.url, enc.options);
+    const dec = graphSession("decoder_q4f16", "webgpu");
+    decoder = await ort.InferenceSession.create(dec.url, dec.options);
     // a short silence proves the GPU can run both graphs before we call it ready
     await transcribe(new Float32Array(8000), { maxNew: 4 });
   })().catch((e) => { ready = null; encoder = null; decoder = null; throw e; });
