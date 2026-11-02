@@ -42,6 +42,9 @@ export const LocalSTT = (() => {
       return "it couldn't be downloaded (you may be offline, or something is blocking cdn.jsdelivr.net or huggingface.co)";
     if (/no WebGPU adapter/i.test(m)) return "this browser has no WebGPU GPU, which LFM3 Audio needs";
     if (/webgpu|gpu|adapter/i.test(m)) return "this browser's GPU support failed while running it";
+    // session create throws these when the .onnx_data sidecars were not mounted
+    if (/external data|can't create a session|mountedfiles/i.test(m))
+      return "the model's weight files didn't load";
     if (/wasm|webassembly|backend/i.test(m)) return "this browser couldn't start the WebAssembly runtime it needs";
     return "this browser couldn't run it";
   };
